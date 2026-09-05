@@ -1,0 +1,16 @@
+{
+  "name": "betterfun",
+  "private": true,
+  "workspaces": [
+    "app",
+    "backend",
+    "shared"
+  ],
+  "scripts": {
+    "dev:app": "cd app && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "build:shared": "cd shared && npm run build",
+    "lint": "npm run lint --workspaces",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}
