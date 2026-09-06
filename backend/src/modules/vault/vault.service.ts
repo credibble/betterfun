@@ -1,8 +1,17 @@
-import { createPublicClient, createWalletClient, http, parseAbi, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  parseAbi,
+  type Hex,
+} from "viem";
 import { somnia } from "viem/chains";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { EVENT_VAULT_ABI, VAULT_FACTORY_ABI } from "./vault-abi.js";
+import { Pot } from "../pots/pot.entity.js";
+import { broadcast } from "../realtime/ws-hub.js";
 
 const publicClient = createPublicClient({
   chain: somnia,
@@ -10,10 +19,11 @@ const publicClient = createPublicClient({
 });
 
 function getOperatorClient(privateKey: Hex) {
+  const account = privateKeyToAccount(privateKey);
   return createWalletClient({
     chain: somnia,
     transport: http(env.SOMNIA_RPC_URL),
-    account: privateKey,
+    account,
   });
 }
 
@@ -70,20 +80,29 @@ export async function readVaultPositionTotals(vault: Hex) {
 }
 
 export async function readVaultState(vault: Hex) {
-  const [nav, price, exposure, totalSupply, halted, operatorFees, protocolFees, operator, governance] =
-    await publicClient.multicall({
-      contracts: [
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "nav" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "pricePerShare" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "exposure" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "totalSupply" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "halted" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "operatorFees" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "protocolFees" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "operator" },
-        { address: vault, abi: EVENT_VAULT_ABI, functionName: "governance" },
-      ],
-    });
+  const [
+    nav,
+    price,
+    exposure,
+    totalSupply,
+    halted,
+    operatorFees,
+    protocolFees,
+    operator,
+    governance,
+  ] = await publicClient.multicall({
+    contracts: [
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "nav" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "pricePerShare" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "exposure" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "totalSupply" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "halted" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "operatorFees" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "protocolFees" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "operator" },
+      { address: vault, abi: EVENT_VAULT_ABI, functionName: "governance" },
+    ],
+  });
 
   return {
     nav: nav.result as bigint,
@@ -192,5 +211,48 @@ export async function factoryVaultCount(factory: Hex): Promise<bigint> {
     address: factory,
     abi: VAULT_FACTORY_ABI,
     functionName: "vaultCount",
+  });
+}
+
+/* ─── Vault → DB sync ─────────────────────────────────────────────── */
+
+/**
+ * Read vault state on-chain and update the pot's DB fields.
+ * Called after every vault trade and periodically via sync job.
+ */
+export async function syncPotFromVault(
+  vaultAddress: Hex,
+  potId: string,
+  dataSource: import("typeorm").DataSource,
+): Promise<void> {
+  const { nav, pricePerShare, totalSupply } =
+    await readVaultState(vaultAddress);
+  const { yes, no } = await readVaultPositionTotals(vaultAddress);
+
+  const potRepo = dataSource.getRepository(Pot);
+  const pot = await potRepo.findOne({ where: { id: potId } });
+  if (!pot) return;
+
+  const NAV_DECIMALS = 6;
+  const navUsd = Number(nav) / 10 ** NAV_DECIMALS;
+  const deployed = Number(yes < no ? yes : no) / 10 ** NAV_DECIMALS;
+  const cash = navUsd - deployed;
+  const sharesOutstanding = Number(totalSupply) / 1e18;
+  const lpPrice = sharesOutstanding > 0 ? Number(pricePerShare) / 1e18 : 1;
+
+  pot.nav = navUsd;
+  pot.cash = cash;
+  pot.deployed = deployed;
+  pot.lpPrice = lpPrice;
+  pot.sharesOutstanding = sharesOutstanding;
+  await potRepo.save(pot);
+
+  broadcast(`pot:${pot.id}`, {
+    type: "pot:update",
+    potId: pot.id,
+    nav: navUsd,
+    cash,
+    deployed,
+    lpPrice,
   });
 }

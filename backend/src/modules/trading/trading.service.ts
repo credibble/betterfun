@@ -7,7 +7,7 @@ import { Position } from "./position.entity.js";
 import { Order } from "./order.entity.js";
 import { Trade } from "./trade.entity.js";
 import { broadcast } from "../realtime/ws-hub.js";
-import { vaultTrade } from "../vault/vault.service.js";
+import { vaultTrade, syncPotFromVault } from "../vault/vault.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
@@ -92,14 +92,23 @@ export class TradingService {
 
       if (input.sizeUsd <= 0) throw new Error("sizeUsd must be positive");
       const isBuy = input.side.startsWith("buy");
-      if (isBuy && input.sizeUsd > Number(pot.cash)) {
-        throw new Error(`Insufficient cash: ${pot.cash} USDC available, ${input.sizeUsd} requested`);
-      }
 
       const vaultAddr = process.env.VAULT_ADDRESS as Hex;
       const operatorKey = env.POT_MASTER_SEED as Hex;
       if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
         throw new Error("VAULT_ADDRESS and POT_MASTER_SEED must be configured");
+      }
+
+      // Check vault idle balance on-chain for buys
+      if (isBuy) {
+        const { readVaultNav, readVaultPositionTotals } = await import("../vault/vault.service.js");
+        const nav = await readVaultNav(vaultAddr);
+        const { yes, no } = await readVaultPositionTotals(vaultAddr);
+        const idle = nav - (yes < no ? yes : no);
+        const idleUsd = Number(idle) / 1e6;
+        if (input.sizeUsd > idleUsd) {
+          throw new Error(`Insufficient vault balance: $${idleUsd.toFixed(2)} available, $${input.sizeUsd} requested`);
+        }
       }
 
       // Resolve market on-chain via SDK (read-only)
@@ -182,34 +191,11 @@ export class TradingService {
         });
         await this.tradeRepo.save(dbTrade);
 
-        const fillResult = await this.applyFill(pot, input, filled, yesPrice, isBuy);
+        await this.applyFill(pot, input, filled, yesPrice, isBuy);
 
-        // Update pot cash/deployed/nav/lpPrice
-        // costPerContract is always in the outcome's own terms (NO price for NO sides, YES price for YES sides)
-        const costPerContract = isNo ? 1 - yesPrice : yesPrice;
-        const value = filled * costPerContract;
-        if (isBuy) {
-          pot.cash = Number(pot.cash) - value;
-          pot.deployed = Number(pot.deployed) + value;
-        } else {
-          pot.cash = Number(pot.cash) + value;
-          pot.deployed = Math.max(0, Number(pot.deployed) - fillResult.deployedDelta);
-        }
-        pot.nav = Number(pot.cash) + Number(pot.deployed);
-        if (Number(pot.sharesOutstanding) > 0) {
-          pot.lpPrice = Number(pot.nav) / Number(pot.sharesOutstanding);
-        }
-        await this.potRepo.save(pot);
+        // Sync pot DB fields from on-chain vault state
+        await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
 
-        // Realtime push
-        broadcast(`pot:${pot.id}`, {
-          type: "pot:update",
-          potId: pot.id,
-          nav: Number(pot.nav),
-          cash: Number(pot.cash),
-          deployed: Number(pot.deployed),
-          lpPrice: Number(pot.lpPrice),
-        });
         broadcast(`pot:${pot.id}`, {
           type: "trade:update",
           potId: pot.id,
@@ -243,7 +229,7 @@ export class TradingService {
     filled: number,
     yesPrice: number,
     isBuy: boolean,
-  ): Promise<{ deployedDelta: number }> {
+  ): Promise<void> {
     const side: "up" | "down" = input.side.includes("up") ? "up" : "down";
     const isNo = input.side.includes("down");
     const costPerContract = isNo ? 1 - yesPrice : yesPrice;
@@ -292,7 +278,6 @@ export class TradingService {
           updatedAt: position.updatedAt.toISOString(),
         },
       });
-      return { deployedDelta: value };
     } else {
       if (!position) throw new Error("Cannot sell: no open position on this side");
       const closing = Math.min(Number(position.contracts), filled);
@@ -304,8 +289,6 @@ export class TradingService {
         position.contracts = 0;
       }
       await this.positionRepo.save(position);
-      // Return cost basis of sold contracts for deployed tracking
-      return { deployedDelta: closing * Number(position.avgPrice) };
     }
   }
 

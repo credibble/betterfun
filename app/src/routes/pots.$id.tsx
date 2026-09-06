@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check, Zap } from "lucide-react";
 import { useState, useMemo } from "react";
+import { formatUnits } from "viem";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { StakePanel } from "@/components/traders/StakePanel";
@@ -8,6 +9,8 @@ import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe, useTraders, usePots } from "@/lib/queries";
+import { useVaultNav, useVaultExposure, useVaultPrice } from "@/lib/vault-hooks";
+import { TUSDC_TOKEN } from "@/lib/chains";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useWsHub } from "@/lib/use-ws-hub";
@@ -71,6 +74,16 @@ function PotDetailPage() {
   const { data: payout } = usePayout(pot?.id ?? "");
   const { data: shares } = usePotShares(pot?.id ?? "");
   const { data: me } = useMe();
+
+  // On-chain vault data for metrics
+  const { data: vaultNav } = useVaultNav();
+  const { data: vaultPrice } = useVaultPrice();
+  const { data: vaultExposure } = useVaultExposure();
+
+  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
+  const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
+    ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)
+    : 0;
 
   const [copied, setCopied] = useState(false);
   const name = trader?.name ?? handleTrader?.name ?? "Trader";
@@ -160,16 +173,14 @@ function PotDetailPage() {
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-                <Metric label="In the pot" value={formatUsd(pot.nav)} />
+                <Metric label="In the pot" value={formatUsd(vaultNavUsd)} />
                 <Metric
                   label="LP price"
-                  value={`$${Number(pot.lpPrice).toFixed(3)}`}
+                  value={`$${vaultPrice ? Number(formatUnits(vaultPrice, 18)).toFixed(3) : "1.000"}`}
                 />
                 <Metric
                   label="At work"
-                  value={
-                    pot.nav > 0 ? `${Math.round((pot.deployed / pot.nav) * 100)}%` : "—"
-                  }
+                  value={vaultNavUsd > 0 ? `${vaultDeployedPct}%` : "—"}
                 />
               </div>
 
@@ -184,6 +195,16 @@ function PotDetailPage() {
                   {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 </button>
               </div>
+
+              {me && trader && me.id === trader.id && epoch?.status === "live" && (
+                <Link
+                  to="/studio"
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+                >
+                  <Zap className="h-4 w-4" />
+                  Trade this pot
+                </Link>
+              )}
             </div>
 
             <StrategyInfoNote strategy={pot.strategy} />

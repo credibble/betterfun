@@ -11,6 +11,7 @@ import { AiAgentService } from "../ai/ai-agent.service.js";
 import { getReadExchange } from "../dreamdex/exchange.js";
 import { Position } from "../trading/position.entity.js";
 import { redeemSettledPositions } from "../vault/vault-keeper.js";
+import { syncPotFromVault } from "../vault/vault.service.js";
 import { logger } from "../../lib/logger.js";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -21,6 +22,7 @@ export const epochQueue = new Queue("epochs", { connection });
 export const tradingQueue = new Queue("trading", { connection });
 export const verificationQueue = new Queue("verification", { connection });
 export const autoRedeemQueue = new Queue("auto-redeem", { connection });
+export const vaultSyncQueue = new Queue("vault-sync", { connection });
 
 const DEPOSIT_VERIFY_DELAY_MS = 15_000;
 const DEPOSIT_VERIFY_MAX_ATTEMPTS = 20; // ~5 min of retries
@@ -344,6 +346,38 @@ export function startAutoRedeemWorker() {
   return worker;
 }
 
+// ── Vault Sync Worker ──────────────────────────────────────────────────────────
+
+const VAULT_SYNC_INTERVAL_MS = 30_000;
+
+export function startVaultSyncWorker() {
+  const worker = new Worker(
+    "vault-sync",
+    async (job: Job) => {
+      const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+      if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000") return;
+
+      const potRepo = AppDataSource.getRepository(Pot);
+      const pots = await potRepo.find({ where: { status: "trading" } });
+
+      for (const pot of pots) {
+        try {
+          await syncPotFromVault(vaultAddr, pot.id, AppDataSource);
+        } catch (err) {
+          logger.warn(err, `Vault sync failed for pot ${pot.id}`);
+        }
+      }
+    },
+    { connection, concurrency: 1 },
+  );
+
+  worker.on("failed", (job, err) => {
+    logger.error(err, `Vault sync job ${job?.id} failed`);
+  });
+
+  return worker;
+}
+
 /**
  * Bootstrap the epoch schedule on startup: create an upcoming epoch if needed
  * and (re)schedule transitions for any epoch that isn't yet settled.
@@ -376,6 +410,13 @@ export async function ensureEpochSchedule(): Promise<void> {
   await autoRedeemQueue.add("check-and-redeem", {}, {
     repeat: { every: AUTO_REDEEM_INTERVAL_MS },
     jobId: "auto-redeem-positions",
+    removeOnComplete: true,
+  });
+
+  // Register the recurring vault sync job (syncs pot DB fields from on-chain vault state every 30s).
+  await vaultSyncQueue.add("sync-all-pots", {}, {
+    repeat: { every: 30_000 },
+    jobId: "vault-sync-pots",
     removeOnComplete: true,
   });
 

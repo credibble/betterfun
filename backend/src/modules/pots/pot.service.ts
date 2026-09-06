@@ -1,4 +1,5 @@
 import { type DataSource } from "typeorm";
+import { type Hex } from "viem";
 import { v4 as uuid } from "uuid";
 import { Pot } from "./pot.entity.js";
 import { PotShare } from "./pot-share.entity.js";
@@ -10,6 +11,7 @@ import { fundGas } from "../dreamdex/fund.js";
 import { transferTusdc } from "../dreamdex/transfer.js";
 import { verifyTusdcTransfer, isPendingResult } from "../dreamdex/verify.js";
 import { broadcast } from "../realtime/ws-hub.js";
+import { syncPotFromVault } from "../vault/vault.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
@@ -217,12 +219,17 @@ export class PotService {
     }
     await this.shareRepo.save(share);
 
-    // Update pot totals — decimal columns come back as strings from PG, so use
-    // Number() arithmetic (never `+=`/`-=` directly on the loaded entity).
-    pot.cash = Number(pot.cash) + input.amountUsd;
-    pot.nav = Number(pot.nav) + input.amountUsd;
-    pot.sharesOutstanding = Number(pot.sharesOutstanding) + input.amountUsd;
-    await this.potRepo.save(pot);
+    // Update pot totals from on-chain vault state
+    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+    if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+      await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
+    } else {
+      // Fallback: update pot totals directly (legacy path)
+      pot.cash = Number(pot.cash) + input.amountUsd;
+      pot.nav = Number(pot.nav) + input.amountUsd;
+      pot.sharesOutstanding = Number(pot.sharesOutstanding) + input.amountUsd;
+      await this.potRepo.save(pot);
+    }
 
     // Update epoch TVL
     if (epoch) {
@@ -297,11 +304,17 @@ export class PotService {
       await this.shareRepo.save(share);
     }
 
-    // Update pot totals
-    pot.cash = Math.max(0, Number(pot.cash) - input.amountUsd);
-    pot.nav = Math.max(0, Number(pot.nav) - input.amountUsd);
-    pot.sharesOutstanding = Math.max(0, Number(pot.sharesOutstanding) - input.amountUsd);
-    await this.potRepo.save(pot);
+    // Update pot totals from on-chain vault state
+    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+    if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+      await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
+    } else {
+      // Fallback: update pot totals directly (legacy path)
+      pot.cash = Math.max(0, Number(pot.cash) - input.amountUsd);
+      pot.nav = Math.max(0, Number(pot.nav) - input.amountUsd);
+      pot.sharesOutstanding = Math.max(0, Number(pot.sharesOutstanding) - input.amountUsd);
+      await this.potRepo.save(pot);
+    }
 
     // Update epoch TVL
     if (epoch) {

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
 import { TrendingUp, Lock, Wallet } from "lucide-react";
+import { formatUnits } from "viem";
 import { ActionPairTabs } from "@/components/ActionPairTabs";
 import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
 import { useVaultDeposit, useVaultWithdraw, useVaultShares, useVaultNav, useVaultPrice, useVaultTotalSupply, formatNav, formatSharePrice } from "@/lib/vault-hooks";
@@ -68,10 +69,10 @@ export function StakePanel({
   const { data: myVaultShares } = useVaultShares(address);
   const { data: totalSupply } = useVaultTotalSupply();
 
-  const vaultNavUsd = vaultNav ? Number(vaultNav) / 10 ** TUSDC_TOKEN.decimals : 0;
-  const myVaultShareBalance = myVaultShares ? Number(myVaultShares) / 1e18 : 0;
+  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
+  const myVaultShareBalance = myVaultShares ? Number(formatUnits(myVaultShares, 18)) : 0;
   const myVaultValue = vaultPrice && myVaultShares
-    ? (Number(myVaultShares) * Number(vaultPrice)) / 1e18 / 10 ** TUSDC_TOKEN.decimals
+    ? Number(formatUnits(myVaultShares, 18)) * Number(formatUnits(vaultPrice, 18))
     : 0;
 
   const hasVault = VAULT_ADDRESS !== "0x0000000000000000000000000000000000000000";
@@ -209,7 +210,7 @@ export function StakePanel({
               <span>
                 Total LP{" "}
                 <span className="font-semibold text-foreground">
-                  {totalSupply ? (Number(totalSupply) / 1e18).toFixed(2) : "0"}
+                  {totalSupply ? Number(formatUnits(totalSupply, 18)).toFixed(2) : "0"}
                 </span>
               </span>
             </div>
@@ -273,6 +274,31 @@ export function StakePanel({
             <span className="num text-sm text-foreground">{formatUsd(amount)}</span>
           </div>
 
+          <div className="mb-3">
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-3 py-2">
+              <span className="text-sm text-muted-foreground">$</span>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={amount || ""}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  setAmount(isNaN(v) ? 0 : Math.max(0, v));
+                }}
+                placeholder="0"
+                className="w-full bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted-foreground/50 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+              <button
+                type="button"
+                onClick={() => setAmount(mode === "stake" ? vaultNavUsd : myVaultShareBalance)}
+                className="shrink-0 rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/25"
+              >
+                Max
+              </button>
+            </div>
+          </div>
+
           <div className="mb-4 grid grid-cols-4 gap-2">
             {quick.map((v) => (
               <button
@@ -284,13 +310,6 @@ export function StakePanel({
                 +{v}
               </button>
             ))}
-            <button
-              type="button"
-              onClick={() => setAmount(mode === "stake" ? vaultNavUsd : myVaultValue)}
-              className="rounded-md bg-secondary/70 py-2 text-xs font-medium text-foreground hover:bg-secondary"
-            >
-              Max
-            </button>
           </div>
         </>
       )}

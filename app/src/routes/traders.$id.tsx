@@ -44,9 +44,9 @@ function fmtFollowers(n: number): string {
 function traderXp(t: { pnl30: number; winRate: number; followers: number; aum: number }): number {
   return Math.round(
     Math.max(0, t.pnl30 * 10) +
-    t.winRate * 2 +
-    Math.log10(t.followers + 1) * 50 +
-    Math.log10(t.aum + 1) * 30,
+      t.winRate * 2 +
+      Math.log10(t.followers + 1) * 50 +
+      Math.log10(t.aum + 1) * 30,
   );
 }
 
@@ -76,9 +76,7 @@ function TraderProfile() {
   const unfollowMutation = useUnfollow(id);
   const isFollowing = followData?.following ?? false;
 
-  const room = t?.handle
-    ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`
-    : "";
+  const room = t?.handle ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}` : "";
 
   const onFollow = () => {
     if (isFollowing) {
@@ -129,11 +127,19 @@ function TraderProfile() {
   const positive = (t.pnl30 ?? 0) >= 0;
 
   const stats = [
-    { label: "30D PnL", value: `${(t.pnl30 ?? 0) >= 0 ? "+" : ""}${(t.pnl30 ?? 0).toFixed(1)}%`, tone: (t.pnl30 ?? 0) >= 0 ? "up" : "down" },
+    {
+      label: "30D PnL",
+      value: `${(t.pnl30 ?? 0) >= 0 ? "+" : ""}${(t.pnl30 ?? 0).toFixed(1)}%`,
+      tone: (t.pnl30 ?? 0) >= 0 ? "up" : "down",
+    },
     { label: "Win rate", value: `${t.winRate}%`, tone: "muted" },
     { label: "Followers", value: fmtFollowers(t.followers ?? 0), tone: "muted" },
     { label: "AUM", value: <B3TR amount={t.aum ?? 0} compact iconSize={16} />, tone: "muted" },
-    { label: "XP points", value: <XP amount={traderXp(t as any)} compact iconSize={16} />, tone: "muted" },
+    {
+      label: "XP points",
+      value: <XP amount={traderXp(t as any)} compact iconSize={16} />,
+      tone: "muted",
+    },
     { label: "Reputation", value: `${t.reputation ?? 0}`, tone: "muted" },
   ] as const;
 
@@ -239,7 +245,9 @@ function TraderProfile() {
                 <button
                   onClick={() => setNotify((v) => !v)}
                   className={`grid h-9 w-9 place-items-center rounded-lg border border-border transition-colors ${
-                    notify ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                    notify
+                      ? "border-primary/40 bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
                   }`}
                   aria-label="Notify"
                 >
@@ -302,42 +310,15 @@ function TraderProfile() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {pots.map((p) => (
-                    <PotCard key={p.id} pot={{ ...p, traderName: t.name, handle: t.handle }} compactStrategy />
+                    <PotCard
+                      key={p.id}
+                      pot={{ ...p, traderName: t.name, handle: t.handle }}
+                      compactStrategy
+                    />
                   ))}
                 </div>
               </div>
             )}
-
-            {/* Recent pots */}
-            <div className="rounded-xl border border-border bg-card">
-              <div className="border-b border-border px-4 py-3 text-sm font-semibold">
-                Epoch pots
-              </div>
-              <div className="divide-y divide-border">
-                {pots.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-                    No pots yet.
-                  </div>
-                ) : (
-                  pots.slice(0, 6).map((p) => (
-                    <Link
-                      key={p.id}
-                      to="/pots/$id"
-                      params={{ id: p.id }}
-                      className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-secondary/30"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {p.strategy?.title ?? "Pot"}
-                      </span>
-                      <span className="num text-sm font-semibold text-foreground">
-                        ${Number(p.nav).toLocaleString()}
-                      </span>
-                      <span className="text-xs capitalize text-muted-foreground">{epochById.get(p.epochId)?.status ?? ""}</span>
-                    </Link>
-                  ))
-                )}
-              </div>
-            </div>
           </div>
 
           {/* Right rail */}
@@ -351,7 +332,12 @@ function TraderProfile() {
               </div>
               <p className="mt-2 flex flex-wrap items-center gap-x-1 text-sm text-muted-foreground">
                 {fmtFollowers(t.followers ?? 0)} followers copy {t.name}, with{" "}
-                <B3TR amount={t.aum ?? 0} compact iconSize={13} className="font-semibold text-foreground" />{" "}
+                <B3TR
+                  amount={t.aum ?? 0}
+                  compact
+                  iconSize={13}
+                  className="font-semibold text-foreground"
+                />{" "}
                 staked across {pots.length.toLocaleString()} pots.
               </p>
             </div>

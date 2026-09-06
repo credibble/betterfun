@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { formatUnits } from "viem";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
@@ -34,6 +35,8 @@ import {
   useRestMarkets,
   useSetLive,
 } from "@/lib/queries";
+import { useVaultNav, useVaultExposure, useVaultPrice, useVaultPositions } from "@/lib/vault-hooks";
+import { TUSDC_TOKEN } from "@/lib/chains";
 import { cn } from "@/lib/utils";
 import { useWsHub } from "@/lib/use-ws-hub";
 
@@ -500,6 +503,20 @@ function TradeSection({
 
   const trade = useTrade();
   const { data: markets = [] } = useRestMarkets();
+
+  // On-chain vault data for metrics
+  const { data: vaultNav } = useVaultNav();
+  const { data: vaultExposure } = useVaultExposure();
+  const { data: vaultPositions } = useVaultPositions();
+  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
+  const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
+    ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)
+    : 0;
+  // Idle balance = NAV - min(yes, no) — collateral available for new trades
+  const vaultIdle = vaultNav && vaultPositions
+    ? vaultNav - (vaultPositions[0] < vaultPositions[1] ? vaultPositions[0] : vaultPositions[1])
+    : 0n;
+  const vaultIdleUsd = Number(formatUnits(vaultIdle, TUSDC_TOKEN.decimals));
   const allMarkets = Array.isArray(markets) ? markets : [];
   const tradingMarkets = allMarkets.filter(
     (m) => m.status === "trading" || m.status === "locked",
@@ -572,8 +589,8 @@ function TradeSection({
               )}
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              NAV {formatUsd(pot.nav)} · Cash {formatUsd(pot.cash)} · At work{" "}
-              {pot.nav > 0 ? `${Math.round((pot.deployed / pot.nav) * 100)}%` : "—"}
+              NAV {formatUsd(vaultNavUsd)} · At work{" "}
+              {vaultNavUsd > 0 ? `${vaultDeployedPct}%` : "—"}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -723,7 +740,7 @@ function TradeSection({
               question={selectedMarket.question}
               upPrice={Number(selectedMarket.upPrice)}
               downPrice={Number(selectedMarket.downPrice)}
-              cash={Number(pot?.cash ?? 0)}
+              cash={vaultIdleUsd}
               isPending={trade.isPending}
               onSubmit={onTrade}
             />

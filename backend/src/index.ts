@@ -2,7 +2,7 @@ import { env } from "./config/env.js";
 import { AppDataSource } from "./db/data-source.js";
 import { logger } from "./lib/logger.js";
 import { buildApp } from "./app.js";
-import { startEpochWorker, startTradingWorker, startVerificationWorker, startAutoRedeemWorker, ensureEpochSchedule } from "./modules/jobs/scheduler.js";
+import { startEpochWorker, startTradingWorker, startVerificationWorker, startAutoRedeemWorker, startVaultSyncWorker, ensureEpochSchedule } from "./modules/jobs/scheduler.js";
 import { initLiveKit } from "./modules/livekit/livekit.service.js";
 import { setupChatWs } from "./modules/livekit/chat-ws.js";
 import { setupWsHub } from "./modules/realtime/ws-hub.js";
@@ -31,6 +31,7 @@ async function main() {
   const tradingWorker = startTradingWorker();
   const verificationWorker = startVerificationWorker();
   const autoRedeemWorker = startAutoRedeemWorker();
+  const vaultSyncWorker = startVaultSyncWorker();
   logger.info("BullMQ workers started");
 
   // Ensure epoch schedule (create next epoch + schedule transitions)
