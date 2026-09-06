@@ -63,7 +63,7 @@ export function FeaturedPots() {
           <div className="flex min-w-0 flex-col">
             <div className="flex items-center gap-3">
               <Link to="/pots/$id" params={{ id: slug }} className="shrink-0">
-                <TraderAvatar name={name} hue={hue} avatarUrl={undefined} size={48} live={isLive} />
+                <TraderAvatar name={name} hue={hue} avatarUrl={trader?.avatarUrl} size={48} live={isLive} />
               </Link>
               <div className="min-w-0">
                 <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

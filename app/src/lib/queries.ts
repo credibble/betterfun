@@ -7,7 +7,7 @@ import {
   useLivePrice,
   useLivePriceTicks,
 } from "@somnia-chain/markets-sdk/react";
-import { api } from "./api-client";
+import { api, apiUpload } from "./api-client";
 import { sdkMarketsToApi } from "./market-adapter";
 import type {
   MarketSnapshot,
@@ -126,7 +126,7 @@ export function useRestPrice(asset: "BTC" | "ETH") {
 // ── Markets (via SDK) ─────────────────────────────────────────────────────────
 
 export function useMarkets() {
-  const sdk = useSdkMarkets({ limit: 200, refetchInterval: 10_000 });
+  const sdk = useSdkMarkets({ limit: 200 });
   const data = useMemo(
     () => (sdk.data ? sdkMarketsToApi(sdk.data) : []),
     [sdk.data],
@@ -419,7 +419,7 @@ export function useCreateTrader() {
 export function useUpdateTrader() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name?: string; bio?: string; country?: string; tags?: string[] }) =>
+    mutationFn: (input: { name?: string; avatarUrl?: string; bio?: string; country?: string; tags?: string[] }) =>
       api<TraderProfileSchema>("/traders/me", {
         method: "PATCH",
         body: JSON.stringify(input),
@@ -427,6 +427,16 @@ export function useUpdateTrader() {
     onSuccess: (data) => {
       qc.setQueryData(["traders", "me"], data);
       qc.invalidateQueries({ queryKey: ["traders"] });
+    },
+  });
+}
+
+export function useUploadImage() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiUpload<{ url: string; publicId: string }>("/upload/image", formData);
     },
   });
 }
@@ -443,6 +453,50 @@ export function useSetLive() {
       qc.setQueryData(["traders", "me"], data);
       qc.invalidateQueries({ queryKey: ["traders"] });
       qc.invalidateQueries({ queryKey: ["traders", "me"] });
+    },
+  });
+}
+
+// ── Follow / Unfollow ────────────────────────────────────────────────────────
+
+export function useIsFollowing(traderId: string) {
+  return useQuery({
+    queryKey: ["follow", traderId],
+    queryFn: () => api<{ following: boolean }>(`/traders/${traderId}/following`),
+    enabled: !!traderId,
+  });
+}
+
+export function useFollow(traderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ following: boolean; followers: number }>(`/traders/${traderId}/follow`, {
+        method: "POST",
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(["follow", traderId], { following: data.following });
+      qc.setQueryData<TraderProfileSchema>(["traders", traderId], (old) =>
+        old ? { ...old, followers: data.followers } : old,
+      );
+      qc.invalidateQueries({ queryKey: ["traders"] });
+    },
+  });
+}
+
+export function useUnfollow(traderId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ following: boolean; followers: number }>(`/traders/${traderId}/follow`, {
+        method: "DELETE",
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(["follow", traderId], { following: data.following });
+      qc.setQueryData<TraderProfileSchema>(["traders", traderId], (old) =>
+        old ? { ...old, followers: data.followers } : old,
+      );
+      qc.invalidateQueries({ queryKey: ["traders"] });
     },
   });
 }

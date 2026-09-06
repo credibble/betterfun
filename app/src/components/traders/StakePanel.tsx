@@ -1,27 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { parseUnits } from "viem";
-import { Wallet, TrendingUp, Lock, Copy, Check } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { B3TR } from "@/components/Token";
-import {
-  ActionPairTabs,
-} from "@/components/ActionPairTabs";
-import {
-  useDeposit,
-  useWithdraw,
-  usePots,
-  usePotShares,
-  useMe,
-  usePayout,
-  useClaimPayout,
-  usePot,
-  useEpoch,
-} from "@/lib/queries";
-import { TUSDC_TOKEN, TUSDC_ABI } from "@/lib/chains";
-import { copyToClipboard } from "@/lib/clipboard";
+import { useAccount } from "wagmi";
+import { TrendingUp, Lock, Wallet } from "lucide-react";
+import { ActionPairTabs } from "@/components/ActionPairTabs";
+import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
+import { useVaultDeposit, useVaultWithdraw, useVaultShares, useVaultNav, useVaultPrice, useVaultTotalSupply, formatNav, formatSharePrice } from "@/lib/vault-hooks";
+import { VAULT_ADDRESS, TUSDC_TOKEN } from "@/lib/chains";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 
 type Trader = { id: string; name: string };
@@ -54,8 +39,6 @@ export function StakePanel({
   const { address } = useAccount();
   const { data: pots } = usePots();
 
-  // Prefer the trader's funding pot (upcoming epoch — the one followers can stake
-  // into), falling back to their most recent pot in the current window.
   const potList = Array.isArray(pots) ? pots : [];
   const potId =
     potProp?.id ??
@@ -74,76 +57,27 @@ export function StakePanel({
 
   const [amount, setAmount] = useState(0);
   const [mode, setMode] = useState<"stake" | "unstake" | "claim">("stake");
-  const [copied, setCopied] = useState(false);
 
-  const depositMutation = useDeposit();
-  const withdrawMutation = useWithdraw();
+  const { deposit, isPending: depositPending } = useVaultDeposit();
+  const { withdraw, isPending: withdrawPending } = useVaultWithdraw();
   const claimMutation = useClaimPayout();
 
-  // Refs capture latest values without triggering effect churn.
-  const potRef = useRef(pot);
-  potRef.current = pot;
-  const amountRef = useRef(amount);
-  amountRef.current = amount;
-  const traderNameRef = useRef(trader.name);
-  traderNameRef.current = trader.name;
-  const submittedRef = useRef<string | null>(null);
+  // On-chain vault data
+  const { data: vaultNav } = useVaultNav();
+  const { data: vaultPrice } = useVaultPrice();
+  const { data: myVaultShares } = useVaultShares(address);
+  const { data: totalSupply } = useVaultTotalSupply();
 
-  const { writeContractAsync } = useWriteContract();
-  const [txHash, setTxHash] = useState<`0x${string}` | undefined>(undefined);
+  const vaultNavUsd = vaultNav ? Number(vaultNav) / 10 ** TUSDC_TOKEN.decimals : 0;
+  const myVaultShareBalance = myVaultShares ? Number(myVaultShares) / 1e18 : 0;
+  const myVaultValue = vaultPrice && myVaultShares
+    ? (Number(myVaultShares) * Number(vaultPrice)) / 1e18 / 10 ** TUSDC_TOKEN.decimals
+    : 0;
 
-  const submitDeposit = (hash: `0x${string}`) => {
-    // Fire exactly once per transfer hash — never on re-renders.
-    if (submittedRef.current === hash) return;
-    const p = potRef.current;
-    const amt = amountRef.current;
-    if (!p) return;
-    submittedRef.current = hash;
-
-    depositMutation.mutate(
-      { potId: p.id, amountUsd: amt, txHash: hash },
-      {
-        onSuccess: (res) => {
-          toast.success(`Deposited ${formatUsd(res.investedUsd ?? amt)} into ${traderNameRef.current}'s pot`, {
-            description: "Shares minted 1:1 at current NAV.",
-          });
-          setAmount(0);
-          setTxHash(undefined);
-        },
-        onError: (err: any) => {
-          toast.error(err?.message ?? "Deposit failed");
-          setTxHash(undefined);
-        },
-      },
-    );
-  };
-
-  // Submit once the tUSDC transfer is confirmed (guarded so it fires once per hash).
-  const { data: txReceipt, isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
-  useEffect(() => {
-    if (txSuccess && txReceipt && txHash) {
-      submitDeposit(txHash);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [txSuccess, txReceipt, txHash]);
+  const hasVault = VAULT_ADDRESS !== "0x0000000000000000000000000000000000000000";
 
   const onMint = async () => {
-    if (!address) {
-      toast.error("Connect a wallet first");
-      return;
-    }
-    try {
-      const hash = await writeContractAsync({
-        address: TUSDC_TOKEN.address,
-        abi: TUSDC_ABI,
-        functionName: "faucet",
-        args: [parseUnits("1000", 6)],
-        chainId: TUSDC_TOKEN.chainId,
-      });
-      toast.success("Minting 1,000 test tUSDC…", { description: hash.slice(0, 10) });
-    } catch (err: any) {
-      toast.error(err?.message ?? "Mint failed");
-    }
+    toast.info("Use the tUSDC faucet to mint test tokens");
   };
 
   const onStake = async () => {
@@ -155,8 +89,8 @@ export function StakePanel({
       toast.error("Enter an amount to stake");
       return;
     }
-    if (!pot) {
-      toast.error("No pot available yet");
+    if (!hasVault) {
+      toast.error("Vault not deployed yet");
       return;
     }
     if (epoch?.status !== "upcoming") {
@@ -164,46 +98,41 @@ export function StakePanel({
       return;
     }
     try {
-      const hash = await writeContractAsync({
-        address: TUSDC_TOKEN.address,
-        abi: TUSDC_ABI,
-        functionName: "transfer",
-        args: [pot.signerAddress as `0x${string}`, parseUnits(String(amount), 6)],
-        chainId: TUSDC_TOKEN.chainId,
-      });
-      setTxHash(hash);
-      toast.success("Transfer sent — confirming on chain…", { description: hash.slice(0, 10) });
+      await deposit(amount);
+      toast.success(`Deposited ${formatUsd(amount)} into the vault`);
+      setAmount(0);
     } catch (err: any) {
-      toast.error(err?.message ?? "Transfer failed");
+      toast.error(err?.message ?? "Deposit failed");
     }
   };
 
-  const onWithdraw = () => {
-    if (!pot) {
-      toast.error("No pot available");
+  const onWithdraw = async () => {
+    if (!address) {
+      toast.error("Connect a wallet first");
       return;
     }
-    if (epoch?.status !== "upcoming") {
-      toast.error("Withdraw closed", { description: "You can only withdraw before the epoch locks." });
+    if (!hasVault) {
+      toast.error("Vault not deployed yet");
       return;
     }
-    if (staked <= 0) {
-      toast.error("Nothing staked yet");
+    if (myVaultShareBalance <= 0) {
+      toast.error("No vault shares to withdraw");
       return;
     }
-    const amt = amount > 0 ? Math.min(amount, staked) : staked;
-    withdrawMutation.mutate(
-      { potId: pot.id, amountUsd: amt },
-      {
-        onSuccess: () => {
-          toast.success(`Withdrew ${formatUsd(amt)} from ${trader.name}'s pot`);
-          setAmount(0);
-        },
-        onError: (err: any) => {
-          toast.error(err?.message ?? "Withdraw failed");
-        },
-      },
-    );
+    const sharesToWithdraw = amount > 0
+      ? BigInt(Math.floor(amount * 1e18))
+      : myVaultShares ?? 0n;
+    if (sharesToWithdraw <= 0n) {
+      toast.error("Nothing to withdraw");
+      return;
+    }
+    try {
+      await withdraw(sharesToWithdraw);
+      toast.success("Withdrawn from vault");
+      setAmount(0);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Withdraw failed");
+    }
   };
 
   const onClaim = () => {
@@ -229,24 +158,11 @@ export function StakePanel({
     );
   };
 
-  const copySigner = () => {
-    if (!pot?.signerAddress) return;
-    copyToClipboard(pot.signerAddress).then((ok) => {
-      setCopied(ok);
-      if (ok) {
-        toast.success("Pot signer address copied");
-        setTimeout(() => setCopied(false), 1500);
-      } else {
-        toast.error("Could not copy — select the text and press Ctrl+C");
-      }
-    });
-  };
-
   const tabs =
     epoch?.status === "settled"
-      ? ([{ value: "claim" as const, label: "Claim" }]) 
+      ? ([{ value: "claim" as const, label: "Claim" }])
       : ([
-          { value: "stake" as const, label: "Stake" },
+          { value: "stake" as const, label: "Deposit" },
           { value: "unstake" as const, label: "Withdraw" },
         ]);
 
@@ -254,7 +170,7 @@ export function StakePanel({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="mb-4 flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-sm font-semibold">
-          Pot funding
+          Vault LP
         </span>
         <span className="flex items-center gap-1 rounded-md bg-secondary/60 px-2 py-1 text-xs text-muted-foreground">
           <Wallet className="h-3.5 w-3.5" />
@@ -262,88 +178,87 @@ export function StakePanel({
         </span>
       </div>
 
-      {pot ? (
+      {hasVault ? (
         <div className="mb-4 space-y-3">
           <div className="rounded-lg border border-border bg-secondary/20 p-3 text-xs">
             <div className="flex items-center justify-between">
               <span className="font-semibold text-foreground">{potPhase(epoch?.status)}</span>
               <span className="rounded-md bg-primary/15 px-1.5 py-0.5 font-bold text-primary">
-                NAV {formatUsd(pot.nav)}
+                NAV {formatNav(vaultNav)}
               </span>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
               <span>
-                LP price{" "}
-                <span className="num font-semibold text-foreground">
-                  ${Number(pot.lpPrice).toFixed(3)}
+                Share price{" "}
+                <span className="font-semibold text-foreground">
+                  {formatSharePrice(vaultPrice)}
                 </span>
               </span>
               <span>
-                At work{" "}
+                Your shares{" "}
                 <span className="font-semibold text-foreground">
-                  {pot.nav > 0 ? `${Math.round((pot.deployed / pot.nav) * 100)}%` : "—"}
+                  {myVaultShareBalance > 0 ? myVaultShareBalance.toFixed(4) : "0"}
                 </span>
               </span>
-              <span className="col-span-2 truncate">
-                Signer{" "}
-                <button
-                  type="button"
-                  onClick={copySigner}
-                  className="inline-flex items-center gap-1 font-semibold text-link hover:underline"
-                >
-                  {pot.signerAddress.slice(0, 6)}…{pot.signerAddress.slice(-4)}
-                  {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                </button>
+              <span>
+                Your value{" "}
+                <span className="font-semibold text-foreground">
+                  {formatUsd(Math.round(myVaultValue))}
+                </span>
+              </span>
+              <span>
+                Total LP{" "}
+                <span className="font-semibold text-foreground">
+                  {totalSupply ? (Number(totalSupply) / 1e18).toFixed(2) : "0"}
+                </span>
               </span>
             </div>
-            <Link
-              to="/pots/$id"
-              params={{ id: pot.id }}
-              className="mt-2 inline-block font-semibold text-link hover:underline"
-            >
-              View pot detail
-            </Link>
+            <div className="mt-2 truncate text-muted-foreground">
+              Vault{" "}
+              <span className="font-semibold text-link">
+                {VAULT_ADDRESS.slice(0, 6)}…{VAULT_ADDRESS.slice(-4)}
+              </span>
+            </div>
           </div>
-          <StrategyInfoNote strategy={pot.strategy} compact />
+          {pot && <StrategyInfoNote strategy={pot.strategy} compact />}
         </div>
       ) : (
         <div className="mb-4 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-          No pot for this trader yet.
+          Vault not deployed yet.
+        </div>
+      )}
+
+      {myVaultShareBalance > 0 && (
+        <div className="mb-4 rounded-lg border border-up/30 bg-up/10 p-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">Your stake</span>
+            <span className="text-sm font-bold text-foreground">{formatUsd(Math.round(myVaultValue))}</span>
+          </div>
+          <div className="mt-1 flex items-center justify-between">
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <TrendingUp className="h-3.5 w-3.5 text-up" /> LP shares
+            </span>
+            <span className="text-sm font-semibold text-up">{myVaultShareBalance.toFixed(4)}</span>
+          </div>
         </div>
       )}
 
       {staked > 0 && (
-        <div className="mb-4 rounded-lg border border-up/30 bg-up/10 p-3">
+        <div className="mb-4 rounded-lg border border-border bg-secondary/20 p-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Your stake</span>
-            <span className="text-sm font-bold text-foreground">{formatUsd(staked)}</span>
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <TrendingUp className="h-3.5 w-3.5 text-up" /> Claimable
-            </span>
-            <span className="text-sm font-semibold text-up">{formatUsd(claimable)}</span>
+            <span className="text-xs text-muted-foreground">Legacy pot stake</span>
+            <span className="text-sm font-semibold text-foreground">{formatUsd(staked)}</span>
           </div>
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onMint}
-          className="rounded-md bg-secondary/70 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-secondary"
-        >
-          Mint 1,000 test tUSDC
-        </button>
-      </div>
-
       <ActionPairTabs className="mb-4" value={mode} onChange={setMode} options={tabs} />
 
-      {pot && epoch?.status !== "upcoming" && mode !== "claim" && (
+      {hasVault && epoch?.status !== "upcoming" && mode !== "claim" && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-foreground">
           <Lock className="mt-0.5 h-3.5 shrink-0 text-warn" />
           <p>
-            {potPhase(epoch?.status)} — stakes are locked until the pot settles.{" "}
+            {potPhase(epoch?.status)} — deposits are locked until the pot settles.{" "}
             <Link to="/epochs" className="font-semibold text-link hover:underline">
               View epochs
             </Link>
@@ -371,7 +286,7 @@ export function StakePanel({
             ))}
             <button
               type="button"
-              onClick={() => setAmount(mode === "stake" ? (pot?.nav ?? 0) : staked)}
+              onClick={() => setAmount(mode === "stake" ? vaultNavUsd : myVaultValue)}
               className="rounded-md bg-secondary/70 py-2 text-xs font-medium text-foreground hover:bg-secondary"
             >
               Max
@@ -384,20 +299,20 @@ export function StakePanel({
         <button
           type="button"
           onClick={onStake}
-          disabled={depositMutation.isPending || !!txHash}
+          disabled={depositPending || !hasVault}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-up py-3 text-sm font-semibold text-up-foreground shadow-block-up transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
         >
-          {txHash ? "Confirming transfer…" : depositMutation.isPending ? "Depositing…" : <>Stake {amount > 0 ? `$${amount.toLocaleString()}` : ""}</>}
+          {depositPending ? "Depositing…" : <>Deposit {amount > 0 ? `$${amount.toLocaleString()}` : ""}</>}
         </button>
       )}
       {mode === "unstake" && (
         <button
           type="button"
           onClick={onWithdraw}
-          disabled={withdrawMutation.isPending}
+          disabled={withdrawPending || !hasVault}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-down py-3 text-sm font-semibold text-down-foreground shadow-block-down transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
         >
-          {withdrawMutation.isPending ? "Withdrawing…" : "Withdraw before lock"}
+          {withdrawPending ? "Withdrawing…" : "Withdraw from vault"}
         </button>
       )}
       {mode === "claim" && (

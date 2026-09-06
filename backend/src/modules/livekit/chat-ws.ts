@@ -7,8 +7,9 @@ interface ChatWsClient extends WebSocket {
 }
 
 export function setupChatWs(server: Server) {
-  // perMessageDeflate:false avoids "Invalid frame header" errors with some clients.
-  const wss = new WebSocketServer({ server, path: "/ws/chat", perMessageDeflate: false });
+  // Use noServer mode so we can share the HTTP server with the WS hub.
+  // The main startup code calls server.on('upgrade') to route by path.
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
   interface AliveWs extends WebSocket {
     isAlive?: boolean;

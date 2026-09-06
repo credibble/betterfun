@@ -1,6 +1,7 @@
 import { Router } from "express";
 import type { DataSource } from "typeorm";
 import { TraderProfile } from "./trader-profile.entity.js";
+import { TraderFollow } from "./trader-follow.entity.js";
 import { requireAuth, requireTrader, type AuthenticatedRequest } from "../auth/auth.middleware.js";
 import { signAccessToken } from "../auth/jwt.js";
 import { TraderApplyRequest, TraderProfileUpdateRequest } from "@betterfun/shared";
@@ -14,6 +15,7 @@ function serializeTrader(t: TraderProfile) {
     aiConfig: t.aiConfig ?? undefined,
     name: t.name,
     handle: t.handle,
+    avatarUrl: t.avatarUrl ?? "",
     bio: t.bio,
     country: t.country,
     tags: t.tags ?? [],
@@ -32,6 +34,7 @@ function serializeTrader(t: TraderProfile) {
 export function buildTraderRoutes(dataSource: DataSource) {
   const router = Router();
   const repo = dataSource.getRepository(TraderProfile);
+  const followRepo = dataSource.getRepository(TraderFollow);
 
   // GET /traders/me — the caller's own profile (must come before /:id)
   router.get("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -64,6 +67,7 @@ export function buildTraderRoutes(dataSource: DataSource) {
       }
 
       if (parsed.data.name != null) trader.name = parsed.data.name;
+      if (parsed.data.avatarUrl != null) trader.avatarUrl = parsed.data.avatarUrl;
       if (parsed.data.bio != null) trader.bio = parsed.data.bio;
       if (parsed.data.country != null) trader.country = parsed.data.country;
       if (parsed.data.tags != null) trader.tags = parsed.data.tags;
@@ -180,6 +184,83 @@ export function buildTraderRoutes(dataSource: DataSource) {
       return;
     }
     res.json(serializeTrader(trader));
+  });
+
+  // GET /traders/:id/following — check if the caller follows this trader
+  router.get("/:id/following", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const trader = await repo.findOne({ where: { id } });
+      if (!trader) {
+        res.status(404).json({ error: "Trader not found" });
+        return;
+      }
+      const follow = await followRepo.findOne({
+        where: { followerId: req.claims!.sub, traderId: trader.id },
+      });
+      res.json({ following: !!follow });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // POST /traders/:id/follow — follow a trader
+  router.post("/:id/follow", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const trader = await repo.findOne({ where: { id } });
+      if (!trader) {
+        res.status(404).json({ error: "Trader not found" });
+        return;
+      }
+      if (trader.userId === req.claims!.sub) {
+        res.status(400).json({ error: "Cannot follow yourself" });
+        return;
+      }
+      const existing = await followRepo.findOne({
+        where: { followerId: req.claims!.sub, traderId: trader.id },
+      });
+      if (existing) {
+        res.json({ following: true, followers: Number(trader.followers) });
+        return;
+      }
+      await followRepo.save(followRepo.create({ followerId: req.claims!.sub, traderId: trader.id }));
+      trader.followers = Number(trader.followers) + 1;
+      await repo.save(trader);
+      logger.info(`User ${req.claims!.sub} followed trader ${trader.handle}`);
+      res.json({ following: true, followers: Number(trader.followers) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // DELETE /traders/:id/follow — unfollow a trader
+  router.delete("/:id/follow", requireAuth, async (req: AuthenticatedRequest, res) => {
+    try {
+      const id = String(req.params.id);
+      const trader = await repo.findOne({ where: { id } });
+      if (!trader) {
+        res.status(404).json({ error: "Trader not found" });
+        return;
+      }
+      const existing = await followRepo.findOne({
+        where: { followerId: req.claims!.sub, traderId: trader.id },
+      });
+      if (!existing) {
+        res.json({ following: false, followers: Number(trader.followers) });
+        return;
+      }
+      await followRepo.remove(existing);
+      trader.followers = Math.max(0, Number(trader.followers) - 1);
+      await repo.save(trader);
+      logger.info(`User ${req.claims!.sub} unfollowed trader ${trader.handle}`);
+      res.json({ following: false, followers: Number(trader.followers) });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
   });
 
   return router;

@@ -1,11 +1,13 @@
 import OpenAI from "openai";
 import { z } from "zod";
 import { type DataSource } from "typeorm";
+import { type Hex } from "viem";
 import { env } from "../../config/env.js";
 import { Pot } from "../pots/pot.entity.js";
 import { Epoch } from "../epochs/epoch.entity.js";
 import { loadLiveBinaryMarkets, fetchPrice, fetchOrderBook } from "../dreamdex/market.service.js";
-import { TradingService } from "../trading/trading.service.js";
+import { getReadExchange } from "../dreamdex/exchange.js";
+import { vaultTrade, readVaultNav } from "../vault/vault.service.js";
 import { logger } from "../../lib/logger.js";
 
 export interface AiDecision {
@@ -37,15 +39,14 @@ const RISK_CAPS = {
 
 const MIN_LEFT_SEC = 300;
 const MAX_CANDIDATES = 8;
+const NS_PER_SEC = 1_000_000_000n;
 
 export class AiAgentService {
   private openai: OpenAI | null = null;
-  private tradingService: TradingService;
   private potRepo;
   private epochRepo;
 
   constructor(dataSource: DataSource) {
-    this.tradingService = new TradingService(dataSource);
     this.potRepo = dataSource.getRepository(Pot);
     this.epochRepo = dataSource.getRepository(Epoch);
     if (env.OPENAI_API_KEY) {
@@ -54,13 +55,20 @@ export class AiAgentService {
   }
 
   /**
-   * Run a single AI trading cycle for a pot.
-   * Gathers structured market data → calls OpenAI → enforces hard risk caps →
-   * executes a price-capped IOC via the trading service.
+   * Run a single AI trading cycle.
+   * Gathers market data → calls OpenAI → enforces risk caps →
+   * executes via vault.trade() on-chain.
    */
   async runCycle(potId: string): Promise<AiDecision | null> {
     if (!this.openai) {
       logger.warn("OpenAI not configured — skipping AI cycle");
+      return null;
+    }
+
+    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+    const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
+    if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
+      logger.warn("VAULT_ADDRESS or POT_MASTER_SEED not set — skipping AI cycle");
       return null;
     }
 
@@ -71,22 +79,24 @@ export class AiAgentService {
       if (!epoch || epoch.status !== "live") return null;
 
       const caps = RISK_CAPS[pot.strategy?.risk ?? "balanced"];
-      const cash = Number(pot.cash);
 
-      // Hard stop-loss: NAV vs baseline (sharesOutstanding ≈ total deposits at 1:1).
-      const baseline = Number(pot.sharesOutstanding);
-      const nav = Number(pot.nav);
-      if (baseline > 0 && nav < baseline * (1 - caps.stopLossPct)) {
-        logger.info(`AI pot ${potId} hit stop-loss (nav=${nav}, baseline=${baseline}) — halting trading`);
+      // Read vault NAV on-chain
+      let nav: number;
+      try {
+        const navRaw = await readVaultNav(vaultAddr);
+        nav = Number(navRaw) / 1e6; // tUSDC 6 decimals
+      } catch {
+        logger.warn("Failed to read vault NAV — skipping cycle");
         return null;
       }
 
+      const cash = nav; // vault NAV = deployable capital
       if (cash <= 1) {
         logger.info(`AI pot ${potId} has no deployable cash`);
         return null;
       }
 
-      // 1. Gather structured market data
+      // 1. Gather market data
       const markets = await loadLiveBinaryMarkets();
       const now = Date.now();
       const candidates = markets
@@ -112,22 +122,23 @@ export class AiAgentService {
         const spread = bestBid != null && bestAsk != null ? bestAsk - bestBid : null;
         marketContext.push(
           `- ${m.id}: asset=${m.asset}, expiry=${new Date(m.expiry).toISOString()}, ` +
-          `volume=${Math.round(m.volume)}, yesMid=${mid.toFixed(3)}, spread=${spread?.toFixed(3) ?? "n/a"}`,
+          `volume=${Math.round(m.volume)}, yesMid=${mid.toFixed(3)}, spread=${spread?.toFixed(3) ?? "n/a"}, pool=${m.poolAddress}`,
         );
       }
 
       // 2. Build prompt
-      const systemPrompt = `You are an AI trading agent for a prediction-market pot on DreamDEX.
-You trade binary "Up or Down" event contracts on BTC and ETH prices. Each contract pays 1 USDso if correct, else 0.
-You manage a pot funded by real followers — trade conservatively and only when you have a genuine edge.
-The pot's risk level is ${pot.strategy?.risk ?? "balanced"}.
-Output ONLY valid JSON matching: { "side": "buy_up"|"buy_down"|"hold", "marketId": "...", "symbol": "...", "sizeUsd": number, "maxPrice": number, "confidence": 0..1, "rationale": "..." }
+      const systemPrompt = `You are an AI trading agent for a prediction-market vault on DreamDEX.
+You trade binary "Up or Down" event contracts on BTC and ETH prices. Each contract pays 1 USDC if correct, else 0.
+You manage a vault funded by real LPs — trade conservatively and only when you have a genuine edge.
+The vault's risk level is ${pot.strategy?.risk ?? "balanced"}.
+Output ONLY valid JSON matching: { "side": "buy_up"|"buy_down"|"hold", "marketId": "...", "symbol": "...", "pool": "0x...", "sizeUsd": number, "maxPrice": number, "confidence": 0..1, "rationale": "..." }
+- pool is the on-chain pool address (0x...) for the market.
 - maxPrice is the MAX probability price you will pay for the chosen side (0..1).
 - Choose "hold" if no market offers a clear edge. Never force a trade.`;
 
-      const userPrompt = `Pot status: cash=${cash.toFixed(2)} USDso, nav=${nav.toFixed(2)}.
+      const userPrompt = `Vault status: nav=${cash.toFixed(2)} USDC.
 BTC spot: ${btcPrice ? `$${btcPrice}` : "unknown"}. ETH spot: ${ethPrice ? `$${ethPrice}` : "unknown"}.
-Max single-trade size: ${(cash * caps.maxSinglePct).toFixed(2)} USDso.
+Max single-trade size: ${(cash * caps.maxSinglePct).toFixed(2)} USDC.
 
 Candidate markets:
 ${marketContext.join("\n")}
@@ -171,20 +182,59 @@ Decide the single best trade (or hold). Output only valid JSON.`;
       const sizeUsd = Math.min(decision.sizeUsd, maxSize);
       if (sizeUsd <= 0) return decision;
 
-      // 6. Execute a price-capped IOC
-      // maxPrice is in the SIDE's own terms; convert to the YES-implied cap the
-      // trading service expects (buy_up = YES price, buy_down = 1 − NO price).
-      const yesCap = decision.side === "buy_up" ? decision.maxPrice : 1 - decision.maxPrice;
+      // 6. Execute via vault.trade()
+      // Find the pool address from the candidate markets
+      const market = candidates.find((m) => m.id === decision.marketId);
+      if (!market || !market.poolAddress) {
+        logger.warn(`Market ${decision.marketId} not found or no pool address`);
+        return decision;
+      }
 
-      const result = await this.tradingService.executeTrade({
-        potId,
-        marketId: decision.marketId,
-        side: decision.side as "buy_up" | "buy_down",
-        sizeUsd,
-        maxPrice: yesCap,
-      });
+      const exchange = getReadExchange();
+      await exchange.loadMarkets(true);
+      const onchain = await exchange.client.getMarketOnchain(decision.marketId as `0x${string}`);
+      if (onchain.status !== 1) {
+        logger.warn(`Market ${decision.marketId} is not trading (status ${onchain.status})`);
+        return decision;
+      }
 
-      logger.info(`AI trade executed: ${decision.side} ${result.filled} contracts for pot ${potId} (${decision.rationale})`);
+      const params = await exchange.client.getBinaryBookParams(onchain.pool);
+      const decimals = onchain.decimals ?? 6;
+
+      // Map side to vault side enum: 0=BUY_YES, 1=BUY_NO, 2=SELL_YES, 3=SELL_NO
+      const isBuy = decision.side.startsWith("buy");
+      const isYes = decision.side.endsWith("up");
+      const vaultSide: 0 | 1 | 2 | 3 = isBuy ? (isYes ? 0 : 1) : (isYes ? 2 : 3);
+
+      // Price in the SDK is always YES terms
+      const yesPrice = isYes ? decision.maxPrice : 1 - decision.maxPrice;
+      const rawPrice = BigInt(Math.floor(yesPrice * 10 ** decimals));
+
+      // Size in raw units (lot-snapped)
+      const rawQty = BigInt(Math.floor(sizeUsd * 10 ** decimals));
+      const lotSnapped = params.lotSize > 0n ? rawQty - (rawQty % params.lotSize) : rawQty;
+      if (lotSnapped < params.minQuantity) {
+        logger.info(`Size ${sizeUsd} is below minimum lot — skipping`);
+        return decision;
+      }
+
+      // Expiry in nanoseconds (300s dead-man's switch)
+      const poolExpiryNs = onchain.expiry * NS_PER_SEC;
+      const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
+      const wantNs = nowNs + 300n * NS_PER_SEC;
+      const expiryNs = wantNs < poolExpiryNs ? wantNs : poolExpiryNs;
+
+      const receipt = await vaultTrade(
+        vaultAddr,
+        operatorKey,
+        onchain.pool,
+        vaultSide,
+        rawPrice,
+        lotSnapped,
+        expiryNs,
+      );
+
+      logger.info(`AI vault trade confirmed: tx=${receipt.transactionHash} side=${decision.side} size=${sizeUsd} (${decision.rationale})`);
       return decision;
     } catch (err) {
       logger.error(err, `AI agent cycle failed for pot ${potId}`);

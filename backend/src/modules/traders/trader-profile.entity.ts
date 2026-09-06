@@ -33,6 +33,9 @@ export class TraderProfile {
   @Column({ type: "varchar", length: 30, unique: true })
   handle!: string;
 
+  @Column({ type: "varchar", length: 500, default: "" })
+  avatarUrl!: string;
+
   @Column({ type: "text", default: "" })
   bio!: string;
 

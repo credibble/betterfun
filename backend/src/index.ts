@@ -39,12 +39,28 @@ async function main() {
   // Initialize LiveKit
   initLiveKit();
 
-  // Setup chat WebSocket
-  setupChatWs(server);
+  // Setup WebSocket servers (noServer mode — we route upgrades manually)
+  const chatWss = setupChatWs(server);
+  const hubWss = setupWsHub(server);
   logger.info("Chat WebSocket ready");
+  logger.info("WS hub ready");
 
-  // Setup product WS hub (pot/account/markets/notifications channels)
-  setupWsHub(server);
+  // Manually route HTTP upgrade requests to the correct WebSocket server
+  server.on("upgrade", (req, socket, head) => {
+    const pathname = new URL(req.url ?? "/", `http://${req.headers.host}`).pathname;
+
+    if (pathname === "/ws/chat") {
+      chatWss.handleUpgrade(req, socket, head, (ws) => {
+        chatWss.emit("connection", ws, req);
+      });
+    } else if (pathname === "/ws") {
+      hubWss.handleUpgrade(req, socket, head, (ws) => {
+        hubWss.emit("connection", ws, req);
+      });
+    } else {
+      socket.destroy();
+    }
+  });
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {

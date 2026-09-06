@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { ArrowLeft, Bot, Save, UserCircle2 } from "lucide-react";
+import { useState, useRef } from "react";
+import { ArrowLeft, Bot, Save, UserCircle2, Camera, Loader2 } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useCreateTrader, useUpdateTrader, useMyTrader } from "@/lib/queries";
+import { useCreateTrader, useUpdateTrader, useMyTrader, useUploadImage } from "@/lib/queries";
 
 const COUNTRIES = [
   "Argentina",
@@ -70,9 +70,12 @@ function TraderSettingsPage() {
   const { data: myTrader, isLoading: meLoading } = useMyTrader();
   const createTrader = useCreateTrader();
   const updateTrader = useUpdateTrader();
+  const uploadImage = useUploadImage();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
   const [handle, setHandle] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [bio, setBio] = useState("");
   const [country, setCountry] = useState("");
   const [tagsText, setTagsText] = useState("");
@@ -88,6 +91,7 @@ function TraderSettingsPage() {
   if (!prefilled && myTrader) {
     setName(myTrader.name);
     setHandle(myTrader.handle);
+    setAvatarUrl(myTrader.avatarUrl ?? "");
     setBio(myTrader.bio ?? "");
     setCountry(myTrader.country ?? "");
     setTagsText((myTrader.tags ?? []).join(", "));
@@ -109,6 +113,24 @@ function TraderSettingsPage() {
     .map((s) => s.trim())
     .filter(Boolean);
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be under 5MB");
+      return;
+    }
+
+    uploadImage.mutate(file, {
+      onSuccess: (data) => {
+        setAvatarUrl(data.url);
+        toast.success("Image uploaded");
+      },
+      onError: (err: any) => toast.error(err?.message ?? "Upload failed"),
+    });
+  };
+
   const save = () => {
     if (!name.trim()) {
       toast.error("Display name is required");
@@ -129,6 +151,7 @@ function TraderSettingsPage() {
 
     const base = {
       name: name.trim(),
+      avatarUrl: avatarUrl || undefined,
       bio: bio.trim(),
       country,
       tags: previewTags.slice(0, 5),
@@ -276,6 +299,46 @@ function TraderSettingsPage() {
             </div>
 
             <div className="space-y-2">
+              <Label>Profile image</Label>
+              <div className="flex items-center gap-4">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadImage.isPending}
+                  className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary/50 transition-colors"
+                >
+                  {uploadImage.isPending ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  ) : avatarUrl ? (
+                    <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                  ) : (
+                    <Camera className="h-6 w-6 text-muted-foreground" />
+                  )}
+                </button>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadImage.isPending}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    {avatarUrl ? "Change image" : "Upload image"}
+                  </button>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    JPG, PNG or GIF · max 5MB
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="trader-bio">Bio</Label>
               <Textarea
                 id="trader-bio"
@@ -409,7 +472,7 @@ function TraderSettingsPage() {
                 Preview
               </p>
               <div className="mt-4 flex items-start gap-3">
-                <TraderAvatar name={name || "Trader"} hue={previewHue} size={52} />
+                <TraderAvatar name={name || "Trader"} hue={previewHue} avatarUrl={avatarUrl} size={52} />
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="truncate font-semibold">{name || "Display name"}</p>

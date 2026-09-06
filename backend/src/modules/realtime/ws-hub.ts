@@ -23,8 +23,9 @@ export function broadcast(channel: string, payload: unknown): void {
 }
 
 export function setupWsHub(server: Server): WebSocketServer {
-  // perMessageDeflate:false avoids "Invalid frame header" errors with some clients.
-  const wss = new WebSocketServer({ server, path: "/ws", perMessageDeflate: false });
+  // Use noServer mode so we can share the HTTP server with chat-ws.
+  // The main startup code calls server.on('upgrade') to route by path.
+  const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
 
   wss.on("connection", (ws: HubClient, req) => {
     ws._channels = new Set();

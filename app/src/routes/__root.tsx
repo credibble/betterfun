@@ -8,6 +8,7 @@ import { useEffect } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { SiweSession } from "@/components/auth/SiweSession";
+import { useWsHub } from "@/lib/use-ws-hub";
 
 function NotFoundComponent() {
   return (
@@ -85,6 +86,8 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
+  useWsHub(["epochs", "*"]);
+
   return (
     <>
       <SiweSession />

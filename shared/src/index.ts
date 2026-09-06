@@ -82,6 +82,7 @@ export const TraderProfileSchema = z.object({
   aiConfig: AiConfigSchema.optional(),
   name: z.string().min(1).max(50),
   handle: z.string().min(1).max(30).regex(/^[a-z0-9_-]+$/),
+  avatarUrl: z.string(),
   bio: z.string().max(500),
   country: z.string().max(100),
   tags: z.array(z.string().max(30)),
@@ -298,6 +299,7 @@ export type TraderApplyRequest = z.infer<typeof TraderApplyRequest>;
 
 export const TraderProfileUpdateRequest = z.object({
   name: z.string().min(1).max(50).optional(),
+  avatarUrl: z.string().max(500).optional(),
   bio: z.string().max(500).optional(),
   country: z.string().max(100).optional(),
   tags: z.array(z.string().max(30)).optional(),

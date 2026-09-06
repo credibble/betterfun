@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { StakePanel } from "@/components/traders/StakePanel";
@@ -10,6 +10,7 @@ import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe, useTraders, usePots } from "@/lib/queries";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/clipboard";
+import { useWsHub } from "@/lib/use-ws-hub";
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -60,6 +61,10 @@ function PotDetailPage() {
 
   const pot = isUuid ? potById : potByHandle;
   const isLoading = isUuid ? potByIdLoading : tradersLoading || potsLoading;
+
+  // Subscribe to pot updates via WS hub
+  const potChannels = useMemo(() => pot ? [`pot:${pot.id}`] : [], [pot?.id]);
+  useWsHub(potChannels);
 
   const { data: epoch } = useEpoch(pot?.epochId ?? "");
   const { data: trader } = useTrader(pot?.traderId ?? "");
@@ -128,6 +133,7 @@ function PotDetailPage() {
                   <TraderAvatar
                     name={name}
                     hue={hue}
+                    avatarUrl={trader?.avatarUrl}
                     size={56}
                     live={trader?.isLive}
                   />

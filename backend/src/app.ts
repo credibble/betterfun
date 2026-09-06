@@ -13,6 +13,8 @@ import { buildLiveKitRoutes } from "./modules/livekit/livekit.routes.js";
 import { buildFaucetRoutes } from "./modules/faucet/faucet.routes.js";
 import { buildCommentRoutes } from "./modules/comments/comment.routes.js";
 import { buildDemoRoutes } from "./modules/demo/demo.routes.js";
+import { buildUploadRoutes } from "./modules/upload/upload.routes.js";
+import { buildVaultRoutes } from "./modules/vault/vault.routes.js";
 
 export function buildApp(dataSource: DataSource) {
   const app = express();
@@ -33,7 +35,14 @@ export function buildApp(dataSource: DataSource) {
   app.use("/settlement", buildSettlementRoutes(dataSource));
   app.use("/livekit", buildLiveKitRoutes());
   app.use("/faucet", buildFaucetRoutes());
+  app.use("/upload", buildUploadRoutes());
   app.use("/comments", buildCommentRoutes(dataSource));
+
+  // Vault routes (on-chain EventVault + VaultFactory reads)
+  const factoryAddr = process.env.VAULT_FACTORY_ADDRESS as `0x${string}` | undefined;
+  if (factoryAddr) {
+    app.use("/vault", buildVaultRoutes(factoryAddr));
+  }
 
   // Demo routes — development/testnet only
   if (process.env.NODE_ENV !== "production") {

@@ -1,6 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, Radio, UserPlus, Share2, Users, UserCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  Radio,
+  UserPlus,
+  Share2,
+  Users,
+  UserCheck,
+  Heart,
+  Bell,
+  BellOff,
+} from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { Footer } from "@/components/Footer";
 import { Sparkline } from "@/components/market/Sparkline";
@@ -8,9 +18,18 @@ import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { ReputationBadge } from "@/components/traders/ReputationBadge";
 import { StakePanel } from "@/components/traders/StakePanel";
 import { PotCard } from "@/components/traders/PotCard";
+import { LiveVideoPlayer } from "@/components/traders/LiveVideoPlayer";
+import { LiveChat } from "@/components/traders/LiveChat";
 import { toast } from "sonner";
 import { B3TR, XP } from "@/components/Token";
-import { useTrader, usePots, useEpochs } from "@/lib/queries";
+import {
+  useTrader,
+  usePots,
+  useEpochs,
+  useIsFollowing,
+  useFollow,
+  useUnfollow,
+} from "@/lib/queries";
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text);
@@ -48,9 +67,32 @@ function TraderProfile() {
   const { data: epochsData } = useEpochs();
   const epochs = Array.isArray(epochsData) ? epochsData : [];
   const epochById = new Map(epochs.map((e: any) => [e.id, e]));
-  const [following, setFollowing] = useState(false);
+  const [notify, setNotify] = useState(false);
+  const [likes, setLikes] = useState(0);
+  const [liked, setLiked] = useState(false);
 
-  const onFollow = () => setFollowing((v) => !v);
+  const { data: followData } = useIsFollowing(id);
+  const followMutation = useFollow(id);
+  const unfollowMutation = useUnfollow(id);
+  const isFollowing = followData?.following ?? false;
+
+  const room = t?.handle
+    ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`
+    : "";
+
+  const onFollow = () => {
+    if (isFollowing) {
+      unfollowMutation.mutate(undefined, {
+        onSuccess: () => toast.success(`Unfollowed ${t?.name}`),
+        onError: () => toast.error("Failed to unfollow"),
+      });
+    } else {
+      followMutation.mutate(undefined, {
+        onSuccess: () => toast.success(`Following ${t?.name}`),
+        onError: () => toast.error("Failed to follow"),
+      });
+    }
+  };
 
   const onShare = async () => {
     copyText(window.location.href);
@@ -111,30 +153,45 @@ function TraderProfile() {
           <ArrowLeft className="h-4 w-4" /> Back to traders
         </Link>
 
-        {t.isLive && (
-          <Link
-            to="/live/$id"
-            params={{ id: t.id }}
-            className="mb-4 flex items-center gap-3 rounded-xl border border-down/30 bg-down/10 px-4 py-3 transition-colors hover:bg-down/15"
-          >
-            <span className="flex items-center gap-1.5 rounded-full bg-down px-2.5 py-1 text-xs font-bold uppercase text-down-foreground">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-down-foreground" /> Live
-            </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
-              {t.bio}
-            </span>
-            <span className="num hidden shrink-0 text-xs text-muted-foreground sm:block">
-              {fmtFollowers(t.followers ?? 0)} followers
-            </span>
-          </Link>
-        )}
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-          <div className="min-w-0">
-            {/* Header */}
+          <div className="min-w-0 space-y-5">
+            {/* Live stream (embedded when live) */}
+            {t.isLive && (
+              <div className="overflow-hidden rounded-xl border border-border bg-card">
+                <LiveVideoPlayer room={room} className="h-[360px]" />
+                <div className="flex flex-wrap items-center gap-3 p-4">
+                  <TraderAvatar name={t.name} avatarUrl={t.avatarUrl} size={44} live />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate text-sm font-bold">{t.name}</span>
+                      <ReputationBadge score={t.reputation ?? 0} showScore={false} />
+                    </div>
+                    <div className="truncate text-sm text-muted-foreground">
+                      Live trading stream · {fmtFollowers(t.followers ?? 0)} followers
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setLiked((v) => !v);
+                      setLikes((n) => n + (liked ? -1 : 1));
+                    }}
+                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                      liked
+                        ? "bg-primary/15 text-primary"
+                        : "bg-secondary/60 text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Heart className={`h-3.5 w-3.5 ${liked ? "fill-current" : ""}`} />
+                    <span className="num">{likes.toLocaleString()}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Header card (always shown) */}
             <div className="rounded-xl border border-border bg-card p-5">
               <div className="flex items-start gap-4">
-                <TraderAvatar name={t.name} size={64} live={t.isLive} />
+                <TraderAvatar name={t.name} avatarUrl={t.avatarUrl} size={64} live={t.isLive} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-xl font-bold tracking-tight">{t.name}</h1>
@@ -159,9 +216,10 @@ function TraderProfile() {
               <div className="mt-4 flex items-center gap-2">
                 <button
                   onClick={onFollow}
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground shadow-block-outline transition-all duration-150 hover:bg-secondary/60 active:translate-y-[3px] active:shadow-none"
+                  disabled={followMutation.isPending || unfollowMutation.isPending}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground shadow-block-outline transition-all duration-150 hover:bg-secondary/60 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
                 >
-                  {following ? (
+                  {isFollowing ? (
                     <>
                       <UserCheck className="h-4 w-4" /> Following
                     </>
@@ -178,20 +236,29 @@ function TraderProfile() {
                 >
                   <Share2 className="h-4 w-4" />
                 </button>
+                <button
+                  onClick={() => setNotify((v) => !v)}
+                  className={`grid h-9 w-9 place-items-center rounded-lg border border-border transition-colors ${
+                    notify ? "border-primary/40 bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                  }`}
+                  aria-label="Notify"
+                >
+                  {notify ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                </button>
                 {t.isLive && (
                   <Link
                     to="/live/$id"
                     params={{ id: t.id }}
                     className="ml-auto flex items-center gap-1.5 rounded-lg bg-down px-4 py-2 text-sm font-semibold text-down-foreground transition-all hover:brightness-110"
                   >
-                    <Radio className="h-4 w-4" /> Watch live
+                    <Radio className="h-4 w-4" /> Watch full stream
                   </Link>
                 )}
               </div>
             </div>
 
             {/* Stats */}
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {stats.map((s) => (
                 <div key={s.label} className="rounded-xl border border-border bg-card p-4">
                   <div className="text-xs text-muted-foreground">{s.label}</div>
@@ -211,7 +278,7 @@ function TraderProfile() {
             </div>
 
             {/* Equity curve */}
-            <div className="mt-5 rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card p-4">
               <div className="mb-2 flex items-center justify-between">
                 <h2 className="text-sm font-semibold">Equity curve</h2>
                 <span className="text-xs text-muted-foreground">Last 48 sessions</span>
@@ -226,7 +293,7 @@ function TraderProfile() {
             </div>
 
             {pots.length > 0 && (
-              <div className="mt-5">
+              <div>
                 <div className="mb-3 flex items-center justify-between gap-2">
                   <h2 className="text-sm font-semibold">Epoch pots</h2>
                   <Link to="/pots" className="text-xs font-semibold text-link hover:underline">
@@ -242,7 +309,7 @@ function TraderProfile() {
             )}
 
             {/* Recent pots */}
-            <div className="mt-5 rounded-xl border border-border bg-card">
+            <div className="rounded-xl border border-border bg-card">
               <div className="border-b border-border px-4 py-3 text-sm font-semibold">
                 Epoch pots
               </div>
@@ -275,6 +342,8 @@ function TraderProfile() {
 
           {/* Right rail */}
           <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+            {/* Live chat (when live) */}
+            {t.isLive && <LiveChat room={room} className="h-[440px]" />}
             <StakePanel trader={t} />
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-sm font-semibold">

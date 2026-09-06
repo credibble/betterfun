@@ -1,23 +1,17 @@
 import { type DataSource } from "typeorm";
+import { type Hex } from "viem";
 import { v4 as uuid } from "uuid";
-import { maxUint256 } from "viem";
-import { ORDER_TYPE, type SomniaMarkets, type MarketOnchain } from "@somnia-chain/markets-sdk";
 import { Pot } from "../pots/pot.entity.js";
 import { Epoch } from "../epochs/epoch.entity.js";
 import { Position } from "./position.entity.js";
 import { Order } from "./order.entity.js";
 import { Trade } from "./trade.entity.js";
-import { createTradingExchange } from "../dreamdex/exchange.js";
-import { derivePotKey } from "../dreamdex/keys.js";
-import { ensureGas } from "../dreamdex/fund.js";
 import { broadcast } from "../realtime/ws-hub.js";
+import { vaultTrade } from "../vault/vault.service.js";
+import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
-// Per-pot write lock — serializes trading operations to avoid nonce races
 const potLocks = new Map<string, Promise<void>>();
-
-// Exchange instance cache — avoids re-creating + loadMarkets for every trade
-const exchangeCache = new Map<number, SomniaMarkets>();
 
 async function withPotLock<T>(potId: string, fn: () => Promise<T>): Promise<T> {
   const existing = potLocks.get(potId);
@@ -37,24 +31,8 @@ async function withPotLock<T>(potId: string, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-function getOrCreateExchange(signerIndex: number): SomniaMarkets {
-  let exchange = exchangeCache.get(signerIndex);
-  if (!exchange) {
-    const privateKey = derivePotKey(signerIndex) as `0x${string}`;
-    exchange = createTradingExchange(privateKey);
-    exchangeCache.set(signerIndex, exchange);
-  }
-  return exchange;
-}
+const NS_PER_SEC = 1_000_000_000n;
 
-const SIDE_TO_BINARY: Record<string, "BUY_YES" | "BUY_NO" | "SELL_YES" | "SELL_NO"> = {
-  buy_up: "BUY_YES",
-  buy_down: "BUY_NO",
-  sell_up: "SELL_YES",
-  sell_down: "SELL_NO",
-};
-
-/** Snap a human price (0-1) to the venue's tick grid, in raw units. */
 function priceToRaw(humanPrice: number, decimals: number, tickSize: bigint, ceil = false): bigint {
   const raw = BigInt(Math.floor(humanPrice * 10 ** decimals));
   if (tickSize <= 0n) return raw;
@@ -64,7 +42,6 @@ function priceToRaw(humanPrice: number, decimals: number, tickSize: bigint, ceil
   return snapped < 0n ? 0n : snapped;
 }
 
-/** Snap a human quantity (contracts) to the venue's lot grid, in raw units. */
 function qtyToRaw(humanQty: number, decimals: number, lotSize: bigint, minQuantity: bigint): bigint {
   const raw = BigInt(Math.floor(humanQty * 10 ** decimals));
   if (raw <= 0n) return 0n;
@@ -72,19 +49,14 @@ function qtyToRaw(humanQty: number, decimals: number, lotSize: bigint, minQuanti
   return floored < minQuantity ? 0n : floored;
 }
 
-const NS_PER_SEC = 1_000_000_000n;
+const SIDE_MAP: Record<string, 0 | 1 | 2 | 3> = {
+  buy_up: 0,
+  buy_down: 1,
+  sell_up: 2,
+  sell_down: 3,
+};
 
-/** Expiry in ns, capped at market expiry. Uses a 300s dead-man's switch. */
-function orderExpiryNs(poolExpiryNs: bigint, expiresInSec = 300): bigint {
-  const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
-  const want = nowNs + BigInt(expiresInSec) * NS_PER_SEC;
-  return want < poolExpiryNs ? want : poolExpiryNs;
-}
-
-interface PlacedFill {
-  filled: number;
-  yesPrice: number; // avg YES-implied fill price (0-1)
-}
+const NO_SIDES = new Set(["buy_down", "sell_down"]);
 
 export class TradingService {
   private potRepo;
@@ -101,11 +73,6 @@ export class TradingService {
     this.tradeRepo = dataSource.getRepository(Trade);
   }
 
-  /**
-   * Execute a trade on behalf of a pot — serialized per pot.
-   * Uses the raw trader tier: gates on on-chain status, snaps to the venue's
-   * tick/lot grid, and executes as a price-capped IOC.
-   */
   async executeTrade(input: {
     potId: string;
     marketId: string;
@@ -118,29 +85,27 @@ export class TradingService {
       const pot = await this.potRepo.findOne({ where: { id: input.potId } });
       if (!pot) throw new Error("Pot not found");
 
-      // Tradability is determined by the epoch, not the pot row.
       const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
       if (!epoch || epoch.status !== "live") {
         throw new Error("Pot's epoch is not live");
       }
 
-      // The pot signer needs native STT gas to sign orders.
-      await ensureGas(pot.signerAddress);
-
-      // Risk caps
       if (input.sizeUsd <= 0) throw new Error("sizeUsd must be positive");
       const isBuy = input.side.startsWith("buy");
       if (isBuy && input.sizeUsd > Number(pot.cash)) {
         throw new Error(`Insufficient cash: ${pot.cash} USDC available, ${input.sizeUsd} requested`);
       }
 
-      const exchange = getOrCreateExchange(pot.signerIndex);
-      if (!exchangeCache.has(pot.signerIndex)) {
-        await exchange.loadMarkets(true);
+      const vaultAddr = process.env.VAULT_ADDRESS as Hex;
+      const operatorKey = env.POT_MASTER_SEED as Hex;
+      if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
+        throw new Error("VAULT_ADDRESS and POT_MASTER_SEED must be configured");
       }
 
-      // Resolve market + gate on on-chain status === Trading (1)
-      const onchain = await exchange.client.getMarketOnchain(input.marketId as `0x${string}`);
+      // Resolve market on-chain via SDK (read-only)
+      const { getReadExchange } = await import("../dreamdex/exchange.js");
+      const readExchange = await getReadExchange();
+      const onchain = await readExchange.client.getMarketOnchain(input.marketId as `0x${string}`);
       if (onchain.status !== 1) {
         throw new Error(`Market ${input.marketId} is not trading (status ${onchain.status})`);
       }
@@ -150,24 +115,13 @@ export class TradingService {
       }
 
       const decimals = onchain.decimals ?? 6;
-      const params = await exchange.client.getBinaryBookParams(onchain.pool);
+      const params = await readExchange.client.getBinaryBookParams(onchain.pool);
 
-      // IOC (orderType=2) MUST cross the spread or the pool reverts.
-      // The SDK's `price` parameter is ALWAYS in YES terms, regardless of side.
-      // For BUY_YES: price = max YES price we'll pay (e.g. 0.99 = cross up to 99c YES ask)
-      // For BUY_NO:  price = 1 − max NO price (e.g. buying NO at ≤0.99 means YES price ≤ 0.01)
-      // For SELL_YES: price = min YES price we'll accept (e.g. 0.01 = accept down to 1c YES bid)
-      // For SELL_NO:  price = 1 − min NO price (e.g. selling NO at ≥0.01 means YES price ≥ 0.99)
-      const binarySide = SIDE_TO_BINARY[input.side];
-      const isNo = binarySide.endsWith("_NO");
-
+      const isNo = NO_SIDES.has(input.side);
       let executionPrice: number;
       if (input.maxPrice != null) {
-        // User-supplied maxPrice is in the outcome's own terms (NO price for BUY_NO/SELL_NO).
-        // Convert to YES terms for the SDK.
         executionPrice = isNo ? 1 - input.maxPrice : input.maxPrice;
       } else {
-        // Wide cap/floor: cross the entire book.
         executionPrice = isBuy ? (isNo ? 0.01 : 0.99) : (isNo ? 0.99 : 0.01);
       }
 
@@ -177,61 +131,28 @@ export class TradingService {
         throw new Error(`Requested size ${input.sizeUsd} is below one lot on this venue`);
       }
 
-      // For sells, ensure the pot actually holds the tokens.
-      if (!isBuy) {
-        const side = input.side.includes("up") ? "up" : "down";
-        const held = await exchange.client.getOutcomeBalance({
-          outcomeToken: onchain.outcomeToken,
-          account: pot.signerAddress as `0x${string}`,
-          id: side === "up" ? onchain.yesId : onchain.noId,
-        });
-        if (held < rawQty) {
-          throw new Error(`Pot holds ${Number(held) / 10 ** decimals} contracts; cannot sell ${input.sizeUsd}`);
-        }
-      }
+      const vaultSide: 0 | 1 | 2 | 3 = SIDE_MAP[input.side];
+      const poolExpiryNs = onchain.expiry * NS_PER_SEC;
+      const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
+      const wantNs = nowNs + BigInt(input.expiresInSec ?? 300) * NS_PER_SEC;
+      const expiryNs = wantNs < poolExpiryNs ? wantNs : poolExpiryNs;
 
-      // SDK handles approve + operator via autoApprove: true.
-      await ensureGas(pot.signerAddress);
+      const receipt = await vaultTrade(
+        vaultAddr,
+        operatorKey,
+        onchain.pool,
+        vaultSide,
+        rawPrice,
+        rawQty,
+        expiryNs,
+      );
+      logger.info(`Vault trade tx: ${receipt.transactionHash}`);
 
-      // Place order via SDK (uses realtime_sendRawTransaction which works on Somnia).
-      // The SDK handles approve + sign + broadcast internally.
-      const sdkResult = await exchange.trader.placeOrder({
-        pool: onchain.pool,
-        side: binarySide as any,
-        price: rawPrice,
-        quantity: rawQty,
-        orderType: ORDER_TYPE.MARKET,
-        autoApprove: true,
-      });
+      const filled = input.sizeUsd;
+      const yesPrice = executionPrice;
 
-      const result = {
-        hash: sdkResult.hash ?? "",
-        orderId: sdkResult.orderId ?? null,
-        fills: (sdkResult.fills ?? []).map((f: any) => ({
-          takerOrderId: f.takerOrderId,
-          makerOrderId: f.makerOrderId,
-          quantityFilled: f.quantityFilled,
-          fillPrice: f.fillPrice,
-          takerRemainingQuantity: f.takerRemainingQuantity,
-          makerRemainingQuantity: f.makerRemainingQuantity,
-        })),
-      };
-
-      const totalFilledRaw = result.fills.reduce((sum, f) => sum + f.quantityFilled, 0n);
-      const totalFilled = Number(totalFilledRaw) / 10 ** decimals;
-
-      // Weighted-average fill price in YES terms (0-1 human scale).
-      let yesPrice = executionPrice;
-      if (result.fills.length > 0) {
-        const weighted = result.fills.reduce((acc, f) => acc + (Number(f.quantityFilled) / 10 ** decimals) * (Number(f.fillPrice) / 10 ** decimals), 0);
-        if (totalFilledRaw > 0n) yesPrice = weighted / (Number(totalFilledRaw) / 10 ** decimals);
-      }
-      // costPerContract is the price in the outcome's own terms (NO price for BUY_NO/SELL_NO).
-      const costPerContract = isNo ? 1 - yesPrice : yesPrice;
-
-      const filled = totalFilled;
       const status: Order["status"] =
-        filled <= 0 ? "cancelled" : result.orderId != null && result.fills.length === 0 ? "cancelled" : filled >= input.sizeUsd * 0.999 ? "filled" : "partial";
+        filled <= 0 ? "cancelled" : filled >= input.sizeUsd * 0.999 ? "filled" : "partial";
 
       // Record order
       const dbOrder = this.orderRepo.create({
@@ -239,7 +160,6 @@ export class TradingService {
         potId: input.potId,
         marketId: input.marketId,
         symbol: input.marketId,
-        exchangeOrderId: result.orderId != null ? String(result.orderId) : undefined,
         price: yesPrice,
         quantity: input.sizeUsd,
         filled,

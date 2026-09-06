@@ -26,6 +26,7 @@ type Pot = {
   lpPrice?: number;
   traderName?: string;
   handle?: string;
+  avatarUrl?: string;
 };
 
 export function PotCard({
@@ -53,7 +54,7 @@ export function PotCard({
           <TraderAvatar
             name={name}
             hue={hue}
-            avatarUrl={undefined}
+            avatarUrl={pot.avatarUrl}
             size={44}
             live={false}
           />

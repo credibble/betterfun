@@ -45,6 +45,46 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  const token = localStorage.getItem("access_token");
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+
+  if (res.status === 401) {
+    if (token) {
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        headers.Authorization = `Bearer ${localStorage.getItem("access_token")}`;
+        const retry = await fetch(`${API_BASE}${path}`, {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+        if (!retry.ok) throw new ApiError(retry.status, await retry.text());
+        return retry.json();
+      }
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      window.location.href = "/";
+    }
+    throw new ApiError(401, "Unauthorized");
+  }
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new ApiError(res.status, body);
+  }
+
+  return res.json();
+}
+
 async function tryRefresh(): Promise<boolean> {
   const refreshToken = localStorage.getItem("refresh_token");
   if (!refreshToken) return false;

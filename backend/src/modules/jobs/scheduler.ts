@@ -1,5 +1,6 @@
 import { Queue, Worker, Job } from "bullmq";
 import IORedis from "ioredis";
+import { type Hex } from "viem";
 import { env } from "../../config/env.js";
 import { AppDataSource } from "../../db/data-source.js";
 import { EpochService } from "../epochs/epoch.service.js";
@@ -9,6 +10,7 @@ import { SettlementService } from "../settlement/settlement.service.js";
 import { AiAgentService } from "../ai/ai-agent.service.js";
 import { getReadExchange } from "../dreamdex/exchange.js";
 import { Position } from "../trading/position.entity.js";
+import { redeemSettledPositions } from "../vault/vault-keeper.js";
 import { logger } from "../../lib/logger.js";
 
 const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
@@ -323,6 +325,13 @@ export function startAutoRedeemWorker() {
       const potsRedeemed = await settlementService.redeemExpiredPositions();
       if (potsRedeemed > 0) {
         logger.info(`Auto-redeem cycle: redeemed positions in ${potsRedeemed} pot(s)`);
+      }
+
+      // Also run the vault settlement keeper if a vault is deployed.
+      const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+      const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
+      if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000" && operatorKey) {
+        await redeemSettledPositions(vaultAddr, operatorKey);
       }
     },
     { connection, concurrency: 1 },

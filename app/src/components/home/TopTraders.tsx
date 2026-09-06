@@ -66,7 +66,7 @@ export function TopTraders() {
               className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/50"
             >
               <div className="flex items-center gap-3">
-                <TraderAvatar name={t.name} hue={0} avatarUrl={undefined} size={40} live={t.isLive} />
+                <TraderAvatar name={t.name} hue={0} avatarUrl={t.avatarUrl} size={40} live={t.isLive} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-bold group-hover:text-primary">
                     {t.name}

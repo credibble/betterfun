@@ -7,7 +7,7 @@ export const somniaTestnet = {
     decimals: 18,
   },
   rpcUrls: {
-    default: { http: ["https://api.infra.testnet.somnia.network"] },
+    default: { http: ["https://dream-rpc.somnia.network"] },
   },
   blockExplorers: {
     default: { name: "Somnia Explorer", url: "https://shannon-explorer.somnia.network" },
@@ -25,6 +25,99 @@ export const TUSDC_TOKEN = {
   symbol: "tUSDC",
   name: "Test USDC",
 } as const;
+
+/**
+ * EventVault — on-chain pooled counterparty for binary event contracts.
+ * Set VITE_VAULT_ADDRESS in your .env after deploying with Forge.
+ */
+export const VAULT_ADDRESS = (import.meta.env.VITE_VAULT_ADDRESS ?? "0x0000000000000000000000000000000000000000") as `0x${string}`;
+
+export const VAULT_ABI = [
+  {
+    type: "function",
+    name: "enter",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [{ name: "shares", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "exit",
+    inputs: [{ name: "shares", type: "uint256" }],
+    outputs: [{ name: "collateralOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "nav",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "pricePerShare",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "balanceOf",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "totalSupply",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "exposure",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "halted",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "positionTotals",
+    inputs: [],
+    outputs: [
+      { name: "yes", type: "uint256" },
+      { name: "no", type: "uint256" },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "Deposit",
+    inputs: [
+      { name: "lp", type: "address", indexed: true },
+      { name: "collateralIn", type: "uint256" },
+      { name: "sharesOut", type: "uint256" },
+    ],
+  },
+  {
+    type: "event",
+    name: "Withdraw",
+    inputs: [
+      { name: "lp", type: "address", indexed: true },
+      { name: "sharesBurned", type: "uint256" },
+      { name: "collateralOut", type: "uint256" },
+    ],
+  },
+] as const;
 
 export const TUSDC_ABI = [
   {

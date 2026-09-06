@@ -1,0 +1,1 @@
+{"version":1,"failures":[{"contract":"test/EventVault.t.sol:EventVaultTest","test":"test_enter_secondDeposit_proportional"}]}

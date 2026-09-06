@@ -17,6 +17,7 @@ type Trader = {
   id: string;
   name: string;
   handle: string;
+  avatarUrl?: string;
   bio: string;
   country: string;
   tags: string[];
@@ -62,7 +63,7 @@ export function TraderCard({
             {rank}
           </span>
         )}
-        <TraderAvatar name={t.name} hue={0} size={44} live={t.isLive} />
+        <TraderAvatar name={t.name} hue={0} avatarUrl={t.avatarUrl} size={44} live={t.isLive} />
         <div className="min-w-0 flex-1">
           <Link
             to="/traders/$id"

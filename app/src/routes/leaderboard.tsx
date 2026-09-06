@@ -138,7 +138,7 @@ function LeaderboardPage() {
                   {rank}
                 </span>
                 <span className="flex min-w-0 items-center gap-3">
-                  <TraderAvatar name={t.name} size={38} live={t.isLive} />
+                  <TraderAvatar name={t.name} avatarUrl={t.avatarUrl} size={38} live={t.isLive} />
                   <span className="min-w-0">
                     <span className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold">{t.name}</span>
@@ -241,6 +241,7 @@ function PodiumCard({
       <span className="num text-xs font-bold text-muted-foreground">#{rank}</span>
       <TraderAvatar
         name={trader.name}
+        avatarUrl={trader.avatarUrl}
         size={56}
         live={trader.isLive}
         className="mt-2"

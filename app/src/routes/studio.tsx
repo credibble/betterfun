@@ -35,6 +35,7 @@ import {
   useSetLive,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
+import { useWsHub } from "@/lib/use-ws-hub";
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -98,6 +99,10 @@ function StudioPage() {
     return myPots.find((p) => epochById.get(p.epochId)?.status === "live") ?? null;
   }, [myPots, epochById, trader]);
 
+  // Subscribe to live pot updates via WS hub
+  const potChannels = livePot ? [`pot:${livePot.id}`] : [];
+  useWsHub(potChannels);
+
   // Sync the local "live" flag with the persisted profile flag.
   useEffect(() => {
     if (myTrader) setLive(!!myTrader.isLive);
@@ -157,7 +162,7 @@ function StudioPage() {
       <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <TraderAvatar name={trader.name} hue={seedHue(trader.id)} size={52} live={live} />
+            <TraderAvatar name={trader.name} hue={seedHue(trader.id)} avatarUrl={trader.avatarUrl} size={52} live={live} />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Trader Studio
