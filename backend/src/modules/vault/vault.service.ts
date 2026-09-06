@@ -130,7 +130,7 @@ export async function vaultDeposit(
     abi: EVENT_VAULT_ABI,
     functionName: "enter",
     args: [amount],
-  });
+  } as const);
   logger.info(`vault deposit: ${hash} (${amount} into ${vault})`);
   return publicClient.waitForTransactionReceipt({ hash });
 }
@@ -146,7 +146,7 @@ export async function vaultWithdraw(
     abi: EVENT_VAULT_ABI,
     functionName: "exit",
     args: [shares],
-  });
+  } as const);
   logger.info(`vault withdraw: ${hash} (${shares} shares from ${vault})`);
   return publicClient.waitForTransactionReceipt({ hash });
 }
@@ -166,7 +166,7 @@ export async function vaultTrade(
     abi: EVENT_VAULT_ABI,
     functionName: "trade",
     args: [pool, side, tick, size, expiryNs, 0, 0],
-  });
+  } as const);
   logger.info(`vault trade: ${hash} (side=${side}, size=${size})`);
   return publicClient.waitForTransactionReceipt({ hash });
 }
@@ -183,7 +183,7 @@ export async function vaultRedeem(
     abi: EVENT_VAULT_ABI,
     functionName: "redeem",
     args: [outcomeId, amount],
-  });
+  } as const);
   logger.info(`vault redeem: ${hash} (outcome=${outcomeId}, amount=${amount})`);
   return publicClient.waitForTransactionReceipt({ hash });
 }
@@ -200,7 +200,7 @@ export async function factoryDeploy(
     abi: VAULT_FACTORY_ABI,
     functionName: "deploy",
     args: [trader, exposureLimit],
-  });
+  } as const);
   logger.info(`factory deploy: ${hash} (trader=${trader})`);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   return receipt;
