@@ -10,7 +10,7 @@ import { StakePanel } from "@/components/traders/StakePanel";
 import { PotCard } from "@/components/traders/PotCard";
 import { toast } from "sonner";
 import { B3TR, XP } from "@/components/Token";
-import { useTrader, usePots } from "@/lib/queries";
+import { useTrader, usePots, useEpochs } from "@/lib/queries";
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text);
@@ -45,6 +45,9 @@ function TraderProfile() {
   const { id } = Route.useParams();
   const { data: t, isLoading, error } = useTrader(id);
   const { data: pots = [] } = usePots({ traderId: id });
+  const { data: epochsData } = useEpochs();
+  const epochs = Array.isArray(epochsData) ? epochsData : [];
+  const epochById = new Map(epochs.map((e: any) => [e.id, e]));
   const [following, setFollowing] = useState(false);
 
   const onFollow = () => setFollowing((v) => !v);
@@ -232,7 +235,7 @@ function TraderProfile() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {pots.map((p) => (
-                    <PotCard key={p.id} pot={p} compactStrategy />
+                    <PotCard key={p.id} pot={{ ...p, traderName: t.name, handle: t.handle }} compactStrategy />
                   ))}
                 </div>
               </div>
@@ -262,7 +265,7 @@ function TraderProfile() {
                       <span className="num text-sm font-semibold text-foreground">
                         ${Number(p.nav).toLocaleString()}
                       </span>
-                      <span className="text-xs capitalize text-muted-foreground">{p.status}</span>
+                      <span className="text-xs capitalize text-muted-foreground">{epochById.get(p.epochId)?.status ?? ""}</span>
                     </Link>
                   ))
                 )}

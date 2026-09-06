@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Flame, ChevronRight } from "lucide-react";
-import { usePots } from "@/lib/queries";
+import { usePots, useTraders } from "@/lib/queries";
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -10,8 +10,11 @@ function formatUsd(n: number): string {
 
 export function HotTopics() {
   const { data: pots = [] } = usePots();
+  const { data: traders = [] } = useTraders();
 
   const potList = Array.isArray(pots) ? pots : [];
+  const traderList = Array.isArray(traders) ? traders : [];
+  const handleByTrader = new Map(traderList.map((t) => [t.id, t.handle]));
   const top = [...potList]
     .sort((a, b) => b.nav - a.nav)
     .slice(0, 5);
@@ -21,12 +24,12 @@ export function HotTopics() {
       ? top.map((p, i) => ({
           rank: i + 1,
           id: p.id,
-          label: p.strategy?.title ?? `Pot ${p.id.slice(0, 8)}`,
+          slug: handleByTrader.get(p.traderId) ?? p.id,
+          label: p.strategy?.title ?? "Trader pot",
           vol: `${formatUsd(p.nav)} in the pot`,
-          status: p.status,
         }))
       : [
-          { rank: 1, id: "", label: "No pots yet", vol: "Back a trader next epoch", status: "funding" },
+          { rank: 1, id: "", slug: "", label: "No pots yet", vol: "Back a trader next epoch" },
         ];
 
   return (
@@ -41,7 +44,7 @@ export function HotTopics() {
           <Link
             key={t.id || t.rank}
             to={t.id ? "/pots/$id" : "/pots"}
-            params={t.id ? { id: t.id } : undefined}
+            params={t.id ? { id: t.slug } : undefined}
             className="flex items-center gap-3 py-2.5 transition-colors hover:bg-secondary/30"
           >
             <span className="num w-4 text-sm font-semibold text-muted-foreground">

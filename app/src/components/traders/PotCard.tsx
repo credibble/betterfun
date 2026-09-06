@@ -22,10 +22,10 @@ type Pot = {
   traderId: string;
   epochId: string;
   strategy?: { title: string; note: string; risk: string; focus: string[] };
-  status: string;
   nav: number;
   lpPrice?: number;
   traderName?: string;
+  handle?: string;
 };
 
 export function PotCard({
@@ -37,8 +37,9 @@ export function PotCard({
   className?: string;
   compactStrategy?: boolean;
 }) {
-  const name = pot.traderName ?? pot.traderId;
+  const name = pot.traderName ?? "Trader";
   const hue = seedHue(pot.traderId || pot.id);
+  const slug = pot.handle ?? pot.id;
 
   return (
     <article
@@ -48,7 +49,7 @@ export function PotCard({
       )}
     >
       <div className="flex items-start gap-3">
-        <Link to="/pots/$id" params={{ id: pot.id }} className="shrink-0">
+        <Link to="/pots/$id" params={{ id: slug }} className="shrink-0">
           <TraderAvatar
             name={name}
             hue={hue}
@@ -62,7 +63,7 @@ export function PotCard({
             <div className="min-w-0">
               <Link
                 to="/pots/$id"
-                params={{ id: pot.id }}
+                params={{ id: slug }}
                 className="block truncate text-sm font-bold hover:text-primary"
               >
                 {name}
@@ -98,7 +99,7 @@ export function PotCard({
 
       <Link
         to="/pots/$id"
-        params={{ id: pot.id }}
+        params={{ id: slug }}
         className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-link hover:underline"
       >
         View pot

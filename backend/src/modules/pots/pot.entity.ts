@@ -15,6 +15,9 @@ export class Pot {
   @PrimaryGeneratedColumn("uuid")
   id!: string;
 
+  @Column({ type: "varchar", length: 20, default: "funded" })
+  status!: "funded" | "trading" | "settled";
+
   @Column({ type: "uuid" })
   traderId!: string;
 
@@ -36,9 +39,6 @@ export class Pot {
     risk: "conservative" | "balanced" | "aggressive";
     focus: string[];
   };
-
-  @Column({ type: "varchar", length: 20, default: "funding" })
-  status!: "funding" | "live" | "settling" | "settled";
 
   @Column({ type: "decimal", precision: 20, scale: 6, default: 0 })
   cash!: number;

@@ -1,19 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  Eye,
-  Layers,
   LayoutDashboard,
   LineChart,
-  Mic,
-  MicOff,
+  Maximize2,
+  Minimize2,
   Plus,
   Radio,
-  Signal,
+  Search,
   Users,
-  Video,
-  VideoOff,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,6 +19,9 @@ import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { LiveChat } from "@/components/traders/LiveChat";
 import { LiveVideoPlayer } from "@/components/traders/LiveVideoPlayer";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
+import { MarketCard } from "@/components/prediction/MarketCard";
+import { TradePanel } from "@/components/prediction/TradePanel";
+import { PositionTable } from "@/components/traders/PositionTable";
 import { StreamSetupDialog } from "@/components/studio/StreamSetupDialog";
 import {
   useMyTrader,
@@ -30,24 +29,23 @@ import {
   usePots,
   useCreatePot,
   useTrade,
-  useOrders,
-  useCancelOrder,
   usePositions,
   useTrades,
   useRestMarkets,
+  useSetLive,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-
-function fmtFollowers(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
   return `$${n.toFixed(2)}`;
+}
+
+function fmtFollowers(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
 }
 
 function seedHue(id: string) {
@@ -60,43 +58,64 @@ export const Route = createFileRoute("/studio")({
   head: () => ({
     meta: [
       { title: "Trader Studio — BetterFun" },
-      {
-        name: "description",
-        content:
-          "Manage your pots, go live, and see your followers from Trader Studio on BetterFun.",
-      },
+      { name: "description", content: "Trade pots, go live, and grow your following." },
     ],
   }),
   component: StudioPage,
 });
 
-type Section = "home" | "pots" | "create" | "trade" | "live" | "followers";
+type Section = "overview" | "trade" | "followers";
 
 const SECTIONS: { id: Section; label: string; icon: typeof LayoutDashboard }[] = [
-  { id: "home", label: "Overview", icon: LayoutDashboard },
-  { id: "pots", label: "My pots", icon: Layers },
-  { id: "create", label: "Create pot", icon: Plus },
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "trade", label: "Trade", icon: LineChart },
-  { id: "live", label: "Go live", icon: Radio },
   { id: "followers", label: "Followers", icon: Users },
 ];
 
 function StudioPage() {
-  const [section, setSection] = useState<Section>("home");
+  const [section, setSection] = useState<Section>("overview");
   const [live, setLive] = useState(false);
   const [streamTitle, setStreamTitle] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const { data: myTrader, isLoading: traderLoading } = useMyTrader();
   const { data: epochsData } = useEpochs();
   const { data: potsData } = usePots();
-  const epochs = Array.isArray(epochsData) ? epochsData : [];
-  const allPots = Array.isArray(potsData) ? potsData : [];
+  const setLiveMutation = useSetLive();
 
-  const trader = useMemo(() => {
-    return myTrader ?? null;
-  }, [myTrader]);
+  const epochs = useMemo(() => (Array.isArray(epochsData) ? epochsData : []), [epochsData]);
+  const allPots = useMemo(() => (Array.isArray(potsData) ? potsData : []), [potsData]);
 
-  const myPots = useMemo(() => trader ? allPots.filter((p) => p.traderId === trader.id) : [], [allPots, trader]);
+  const trader = myTrader ?? null;
+  const myPots = useMemo(
+    () => (trader ? allPots.filter((p) => p.traderId === trader.id) : []),
+    [allPots, trader],
+  );
+
+  // A trader runs one pot per epoch — the "live pot" is their pot in the live epoch.
+  const epochById = useMemo(() => new Map(epochs.map((e) => [e.id, e])), [epochs]);
+  const livePot = useMemo(() => {
+    if (!trader) return null;
+    return myPots.find((p) => epochById.get(p.epochId)?.status === "live") ?? null;
+  }, [myPots, epochById, trader]);
+
+  // Sync the local "live" flag with the persisted profile flag.
+  useEffect(() => {
+    if (myTrader) setLive(!!myTrader.isLive);
+  }, [myTrader?.isLive]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const room = trader?.handle
+    ? `stream-${trader.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`
+    : "";
+
+  const toggleLive = (next: boolean) => {
+    setLive(next);
+    setLiveMutation.mutate(next, {
+      onError: (err: any) => {
+        toast.error(err?.message ?? "Failed to update live status");
+        setLive(!next);
+      },
+    });
+  };
 
   if (traderLoading) {
     return (
@@ -120,18 +139,17 @@ function StudioPage() {
             <p className="mt-2 text-sm text-muted-foreground">
               Create a trader profile to access the studio.
             </p>
-            <a
-              href="/become-a-trader"
+            <Link
+              to="/become-a-trader/settings"
               className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
             >
-              Become a trader
-            </a>
+              Create profile
+            </Link>
           </div>
         </main>
       </div>
     );
   }
-  const potTvl = myPots.reduce((s, p) => s + p.nav, 0);
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -139,20 +157,13 @@ function StudioPage() {
       <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <TraderAvatar
-              name={trader.name}
-              hue={seedHue(trader.id ?? "")}
-              size={52}
-              live={live}
-            />
+            <TraderAvatar name={trader.name} hue={seedHue(trader.id)} size={52} live={live} />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Trader Studio
               </p>
               <h1 className="text-2xl font-bold tracking-tight">{trader.name}</h1>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                Manage pots, go live, and grow your following.
-              </p>
+              <p className="mt-0.5 text-sm text-muted-foreground">@{trader.handle}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -171,15 +182,15 @@ function StudioPage() {
             </Link>
             <button
               type="button"
-              onClick={() => setSection("live")}
+              onClick={() => (live ? toggleLive(false) : setSetupOpen(true))}
               className={cn(
-                "rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all duration-150 active:translate-y-[3px] active:shadow-none",
+                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-all duration-150 active:translate-y-[3px] active:shadow-none",
                 live
                   ? "bg-down shadow-block-down hover:brightness-110"
                   : "bg-primary shadow-block-primary hover:brightness-110",
               )}
             >
-              {live ? "On air" : "Go live"}
+              <Radio className="h-4 w-4" /> {live ? "End stream" : "Go live"}
             </button>
           </div>
         </div>
@@ -204,309 +215,38 @@ function StudioPage() {
         </nav>
 
         <div className="mt-6">
-          {section === "home" && (
+          {section === "overview" && (
             <OverviewSection
               trader={trader}
               pots={myPots}
-              potCount={myPots.length}
-              potTvl={potTvl}
-              live={live}
-              onNavigate={setSection}
-            />
-          )}
-          {section === "pots" && (
-            <MyPotsSection pots={myPots} epochs={epochs} onCreate={() => setSection("create")} />
-          )}
-          {section === "create" && (
-            <CreatePotSection
-              trader={trader}
               epochs={epochs}
-              onCreated={() => setSection("pots")}
+              live={live}
+              onGoTrade={() => setSection("trade")}
             />
           )}
           {section === "trade" && (
-            <TradingSection trader={trader} pots={myPots} />
+            <TradeSection
+              trader={trader}
+              pot={livePot}
+              epochStatus={livePot ? (epochById.get(livePot.epochId)?.status ?? "upcoming") : "upcoming"}
+              live={live}
+              onToggleLive={toggleLive}
+              room={room}
+              streamTitle={streamTitle}
+              setStreamTitle={setStreamTitle}
+              setSetupOpen={setSetupOpen}
+            />
           )}
-          {section === "live" && <LiveSection trader={trader} live={live} setLive={setLive} streamTitle={streamTitle} setStreamTitle={setStreamTitle} setSetupOpen={setSetupOpen} setupOpen={setupOpen} />}
           {section === "followers" && <FollowersSection trader={trader} />}
         </div>
       </main>
+      <StreamSetupDialog
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        onConfirm={() => toggleLive(true)}
+        traderHandle={trader.handle}
+      />
       <Footer />
-    </div>
-  );
-}
-
-function TradingSection({ trader, pots }: { trader: any; pots: any[] }) {
-  const livePots = pots.filter((p) => p.status === "live" || p.status === "funding");
-  const [potId, setPotId] = useState(livePots[0]?.id ?? pots[0]?.id ?? "");
-  const [marketId, setMarketId] = useState("");
-  const [side, setSide] = useState<"buy_up" | "buy_down" | "sell_up" | "sell_down">("buy_up");
-  const [sizeUsd, setSizeUsd] = useState(0);
-  const [maxPrice, setMaxPrice] = useState("");
-  const [orderType, setOrderType] = useState<"ioc" | "post_only" | "limit">("ioc");
-
-  const trade = useTrade();
-  const cancel = useCancelOrder();
-  const { data: markets = [] } = useRestMarkets();
-  const tradingMarkets = (Array.isArray(markets) ? markets : []).filter(
-    (m) => m.status === "trading",
-  );
-  const { data: orders = [] } = useOrders(potId);
-  const { data: positions = [] } = usePositions(potId);
-  const { data: trades = [] } = useTrades(potId);
-
-  const selectedMarket = tradingMarkets.find((m) => m.id === marketId);
-
-  const onTrade = () => {
-    if (!potId) {
-      toast.error("Select a pot to trade");
-      return;
-    }
-    if (!marketId) {
-      toast.error("Select a market");
-      return;
-    }
-    if (sizeUsd <= 0) {
-      toast.error("Enter a size");
-      return;
-    }
-    trade.mutate(
-      {
-        potId,
-        marketId,
-        side,
-        sizeUsd,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
-        orderType,
-      },
-      {
-        onSuccess: (res) => {
-          toast.success(`Order placed: ${side} ${res.filled.toFixed(2)} contracts`);
-          setSizeUsd(0);
-        },
-        onError: (err: any) => toast.error(err?.message ?? "Trade failed"),
-      },
-    );
-  };
-
-  return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-bold">Trade a pot</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">
-          Place price-capped IOC orders on live BTC/ETH event markets using pot capital.
-        </p>
-      </div>
-
-      {livePots.length === 0 && pots.length === 0 && (
-        <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-          No pots yet — create one in the pot section, then come back to trade.
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        {/* Order form */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-sm font-semibold">Pot</span>
-              <select
-                value={potId}
-                onChange={(e) => setPotId(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none focus:border-primary/50"
-              >
-                {potId === "" && <option value="">Select a pot</option>}
-                {livePots.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.strategy?.title ?? "Pot"} · {p.status} · ${Number(p.nav).toFixed(2)}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-semibold">Market</span>
-              <select
-                value={marketId}
-                onChange={(e) => setMarketId(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none focus:border-primary/50"
-              >
-                {marketId === "" && <option value="">Select a live market</option>}
-                {tradingMarkets.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.symbol} · UP {m.upPrice != null ? (Number(m.upPrice) * 100).toFixed(0) : "—"}%
-                  </option>
-                ))}
-              </select>
-              {selectedMarket && (
-                <span className="mt-1 block text-xs text-muted-foreground">
-                  YES {selectedMarket.upSymbol} · NO {selectedMarket.downSymbol} ·{" "}
-                  {new Date(selectedMarket.expiry).toLocaleString()}
-                </span>
-              )}
-            </label>
-
-            <div>
-              <span className="text-sm font-semibold">Side</span>
-              <div className="mt-1.5 grid grid-cols-2 gap-2">
-                {(["buy_up", "buy_down", "sell_up", "sell_down"] as const).map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setSide(s)}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition-colors",
-                      side === s
-                        ? s.includes("buy")
-                          ? "border-up/40 bg-up/10 text-foreground"
-                          : "border-down/40 bg-down/10 text-foreground"
-                        : "border-border text-muted-foreground hover:bg-secondary/50",
-                    )}
-                  >
-                    {s.replace("_", " ")}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="text-sm font-semibold">Size (USDC)</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={sizeUsd || ""}
-                  placeholder="0"
-                  onChange={(e) => setSizeUsd(Math.max(0, Number(e.target.value) || 0))}
-                  className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
-                />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold">Max price (optional)</span>
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={maxPrice}
-                  placeholder="0.60"
-                  onChange={(e) => setMaxPrice(e.target.value)}
-                  className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
-                />
-              </label>
-            </div>
-
-            <label className="block">
-              <span className="text-sm font-semibold">Order type</span>
-              <select
-                value={orderType}
-                onChange={(e) => setOrderType(e.target.value as any)}
-                className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none focus:border-primary/50"
-              >
-                <option value="ioc">IOC — fill what crosses, cancel the rest</option>
-                <option value="post_only">Post-only — rest, never take</option>
-                <option value="limit">Limit — fill & rest remainder</option>
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={onTrade}
-              disabled={trade.isPending}
-              className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
-            >
-              {trade.isPending ? "Placing order…" : "Place order"}
-            </button>
-          </div>
-        </div>
-
-        {/* Positions + open orders */}
-        <div className="space-y-5">
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="text-sm font-semibold">Positions</h3>
-            {positions.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">No open positions.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {positions.map((p: any) => (
-                  <li
-                    key={p.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/20 px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{p.symbol ?? p.marketId}</p>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {p.side} · {Number(p.contracts).toFixed(2)} contracts
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="num font-bold">${Number(p.avgPrice).toFixed(3)}</p>
-                      <p className="text-[11px] text-muted-foreground">avg</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="text-sm font-semibold">Open orders</h3>
-            {orders.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">No resting orders.</p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {orders.map((o: any) => (
-                  <li
-                    key={o.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/20 px-3 py-2 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{o.symbol ?? o.marketId}</p>
-                      <p className="text-xs text-muted-foreground capitalize">
-                        {o.side} · ${Number(o.price).toFixed(3)} · {Number(o.filled).toFixed(2)}/{Number(o.quantity).toFixed(2)} filled
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        cancel.mutate({ potId, orderId: o.id }, {
-                          onSuccess: () => toast.success("Order cancelled"),
-                          onError: (err: any) => toast.error(err?.message ?? "Cancel failed"),
-                        })
-                      }
-                      disabled={cancel.isPending}
-                      className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                    >
-                      <X className="h-3 w-3" /> Cancel
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="text-sm font-semibold">Recent trades</h3>
-            {trades.length === 0 ? (
-              <p className="mt-3 text-sm text-muted-foreground">No trades yet.</p>
-            ) : (
-              <ul className="mt-3 space-y-1">
-                {trades.slice(0, 8).map((t: any) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center justify-between gap-3 py-1 text-sm"
-                  >
-                    <span className="min-w-0 truncate capitalize text-muted-foreground">
-                      {t.side} · {Number(t.quantity).toFixed(2)}
-                    </span>
-                    <span className="num text-foreground">${Number(t.price).toFixed(3)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -514,178 +254,59 @@ function TradingSection({ trader, pots }: { trader: any; pots: any[] }) {
 function OverviewSection({
   trader,
   pots,
-  potCount,
-  potTvl,
+  epochs,
   live,
-  onNavigate,
+  onGoTrade,
 }: {
   trader: any;
   pots: any[];
-  potCount: number;
-  potTvl: number;
+  epochs: any[];
   live: boolean;
-  onNavigate: (s: Section) => void;
+  onGoTrade: () => void;
 }) {
+  const [creating, setCreating] = useState(false);
+  const potTvl = pots.reduce((s: number, p: any) => s + Number(p.nav), 0);
+
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Followers"
-          value={fmtFollowers(trader.followers ?? 0)}
-          hint="People watching your book"
-        />
-        <StatCard
-          label="Pot capital"
-          value={formatUsd(potTvl)}
-          hint={`${potCount} pot${potCount === 1 ? "" : "s"}`}
-        />
-        <StatCard
-          label="Stream"
-          value={live ? "Live now" : "Offline"}
-          hint={live ? "You're on air" : "Ready when you are"}
-          accent={live}
-        />
-        <StatCard
-          label="30d PnL"
-          value={`${(trader.pnl30 ?? 0) >= 0 ? "+" : ""}${(trader.pnl30 ?? 0).toFixed(1)}%`}
-          hint="Verified track record"
-        />
+        <StatCard label="Followers" value={fmtFollowers(trader.followers ?? 0)} hint="People following you" />
+        <StatCard label="Pot capital" value={formatUsd(potTvl)} hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`} />
+        <StatCard label="Stream" value={live ? "Live now" : "Offline"} hint={live ? "You're on air" : "Ready when you are"} accent={live} />
+        <StatCard label="30d PnL" value={`${(trader.pnl30 ?? 0) >= 0 ? "+" : ""}${(trader.pnl30 ?? 0).toFixed(1)}%`} hint="Verified track record" />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <QuickAction
-          title="Create a pot"
-          body="Open a pot for the next round and set your playbook."
-          onClick={() => onNavigate("create")}
-        />
-        <QuickAction
-          title="Go live"
-          body="Stream your chart and talk through the trade."
-          onClick={() => onNavigate("live")}
-        />
-        <QuickAction
-          title="See followers"
-          body="Check who's copying and engaging with you."
-          onClick={() => onNavigate("followers")}
-        />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <QuickAction title="Trade your pot" body="Place orders, run live, and see your pot in action." onClick={onGoTrade} />
+        <QuickAction title="Create a pot" body="Open a pot for the next round and set your playbook." onClick={() => setCreating((v) => !v)} />
       </div>
+
+      {creating && <CreatePotForm epochs={epochs} onCreated={() => setCreating(false)} />}
 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Your pots</h2>
           <button
             type="button"
-            onClick={() => onNavigate("pots")}
-            className="text-xs font-semibold text-link hover:underline"
+            onClick={() => setCreating((v) => !v)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary/60"
           >
-            Manage all
+            <Plus className="h-3.5 w-3.5" /> New pot
           </button>
         </div>
-        <MyPotsList
-          pots={pots}
-          emptyHint="No pots yet — create one for the upcoming round."
-        />
+        <PotsList pots={pots} epochs={epochs} handle={trader.handle} emptyHint="No pots yet — create one for the upcoming round." />
       </div>
     </div>
   );
 }
 
-function MyPotsSection({
-  pots,
-  epochs,
-  onCreate,
-}: {
-  pots: any[];
-  epochs: any[];
-  onCreate: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold">My pots</h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            Each pot is tied to one round. Joiners see your name, picture, and strategy note.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onCreate}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
-        >
-          <Plus className="h-4 w-4" /> New pot
-        </button>
-      </div>
-      <MyPotsList pots={pots} epochs={epochs} emptyHint="You haven't opened a pot yet." />
-    </div>
-  );
-}
-
-function MyPotsList({
-  pots,
-  epochs,
-  emptyHint,
-}: {
-  pots: any[];
-  epochs?: any[];
-  emptyHint: string;
-}) {
-  if (pots.length === 0) {
-    return (
-      <div className="mt-3 rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-        {emptyHint}
-      </div>
-    );
-  }
-
-  return (
-    <ul className="mt-3 space-y-2">
-      {pots.map((pot) => {
-        const epoch = epochs?.find((e) => e.id === pot.epochId);
-        return (
-          <li
-            key={pot.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
-          >
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold">{pot.strategy?.title ?? "Pot"}</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {epoch ? `Epoch #${epoch.number}` : pot.epochId} · {formatUsd(pot.nav)} in pot
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              {epoch && <EpochPhaseBadge phase={epoch.status} />}
-              <Link
-                to="/pots/$id"
-                params={{ id: pot.id }}
-                className="inline-flex items-center gap-1 text-xs font-semibold text-link hover:underline"
-              >
-                View <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function CreatePotSection({
-  trader,
-  epochs,
-  onCreated,
-}: {
-  trader: any;
-  epochs: any[];
-  onCreated: () => void;
-}) {
+function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => void }) {
   const stakeEpoch = epochs.find((e) => e.status === "upcoming") ?? epochs[0];
   const [epochId, setEpochId] = useState(stakeEpoch?.id ?? "");
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [risk, setRisk] = useState<"conservative" | "balanced" | "aggressive">("balanced");
   const [focus, setFocus] = useState("");
-
   const createPot = useCreatePot();
 
   const submit = (e: React.FormEvent) => {
@@ -712,15 +333,13 @@ function CreatePotSection({
           setFocus("");
           onCreated();
         },
-        onError: (err: any) => {
-          toast.error(err?.message ?? "Failed to create pot");
-        },
+        onError: (err: any) => toast.error(err?.message ?? "Failed to create pot"),
       },
     );
   };
 
   return (
-    <form onSubmit={submit} className="mx-auto max-w-xl space-y-4">
+    <form onSubmit={submit} className="space-y-4 rounded-xl border border-border bg-card p-5">
       <div>
         <h2 className="text-lg font-bold">Create a pot</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
@@ -799,177 +418,352 @@ function CreatePotSection({
 
       <button
         type="submit"
-        className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+        disabled={createPot.isPending}
+        className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
       >
-        Open pot
+        {createPot.isPending ? "Creating…" : "Open pot"}
       </button>
-      <p className="text-center text-[11px] text-muted-foreground">
-        In production this would create an on-chain pot for the selected epoch.
-      </p>
     </form>
   );
 }
 
-function LiveSection({
+function PotsList({ pots, epochs, handle, emptyHint }: { pots: any[]; epochs: any[]; handle?: string; emptyHint: string }) {
+  if (pots.length === 0) {
+    return (
+      <p className="mt-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
+        {emptyHint}
+      </p>
+    );
+  }
+  return (
+    <ul className="mt-3 space-y-2">
+      {pots.map((pot) => {
+        const epoch = epochs?.find((e) => e.id === pot.epochId);
+        const slug = handle ?? pot.id;
+        return (
+          <li
+            key={pot.id}
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{pot.strategy?.title ?? "Pot"}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {epoch ? `Epoch #${epoch.number}` : pot.epochId} · {formatUsd(pot.nav)} in pot
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {epoch && <EpochPhaseBadge phase={epoch.status} />}
+              <Link
+                to="/pots/$id"
+                params={{ id: slug }}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-link hover:underline"
+              >
+                View <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function TradeSection({
   trader,
+  pot,
+  epochStatus,
   live,
-  setLive,
+  onToggleLive,
+  room,
   streamTitle,
   setStreamTitle,
   setSetupOpen,
-  setupOpen,
 }: {
   trader: any;
+  pot: any;
+  epochStatus: string;
   live: boolean;
-  setLive: (v: boolean) => void;
+  onToggleLive: (next: boolean) => void;
+  room: string;
   streamTitle: string;
   setStreamTitle: (v: string) => void;
   setSetupOpen: (v: boolean) => void;
-  setupOpen: boolean;
 }) {
-  const [cam, setCam] = useState(true);
-  const [mic, setMic] = useState(true);
-  const [viewers, setViewers] = useState(0);
-  const [elapsed, setElapsed] = useState(0);
-  const room = trader?.handle ? `stream-${trader.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}` : "";
+  const [fullscreen, setFullscreen] = useState(false);
+  const [marketId, setMarketId] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const goLive = () => {
-    const next = !live;
-    setLive(next);
-    toast[next ? "success" : "message"](next ? "You're live" : "Stream ended", {
-      description: next
-        ? "Broadcast started — viewers would see your chart and chat."
-        : "Back offline.",
-    });
-  };
+  const trade = useTrade();
+  const { data: markets = [] } = useRestMarkets();
+  const allMarkets = Array.isArray(markets) ? markets : [];
+  const tradingMarkets = allMarkets.filter(
+    (m) => m.status === "trading" || m.status === "locked",
+  );
+  const { data: positions = [] } = usePositions(pot?.id ?? "");
+  const { data: trades = [] } = useTrades(pot?.id ?? "");
 
-  const onGoLiveClick = () => {
-    if (live) {
-      goLive();
+  const selectedMarket = tradingMarkets.find((m) => m.id === marketId);
+
+  const filteredMarkets = tradingMarkets.filter((m) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      m.symbol?.toLowerCase().includes(q) ||
+      m.question?.toLowerCase().includes(q) ||
+      m.asset?.toLowerCase().includes(q)
+    );
+  });
+
+  const onTrade = (input: { side: "buy_up" | "buy_down" | "sell_up" | "sell_down"; sizeUsd: number; maxPrice?: number }) => {
+    if (!pot) {
+      toast.error("No tradable pot in this epoch yet");
       return;
     }
-    setSetupOpen(true);
+    if (!marketId) {
+      toast.error("Select a market");
+      return;
+    }
+    trade.mutate(
+      { potId: pot.id, marketId, side: input.side, sizeUsd: input.sizeUsd, maxPrice: input.maxPrice },
+      {
+        onSuccess: (res) => {
+          toast.success(`${input.side.replace("_", " ")}: ${res.filled.toFixed(2)} filled @ $${res.price.toFixed(3)}`);
+        },
+        onError: (err: any) => toast.error(err?.message ?? "Trade failed"),
+      },
+    );
   };
 
-  const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(
-    elapsed % 60,
-  ).padStart(2, "0")}`;
+  if (!pot) {
+    return (
+      <div className="rounded-xl border border-dashed border-border px-4 py-14 text-center">
+        <p className="text-sm text-muted-foreground">
+          You have no pot in the live epoch. Open a pot for the upcoming round and it will become
+          tradable here when it goes live.
+        </p>
+        <Link
+          to="/epochs"
+          className="mt-4 inline-block rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+        >
+          View epoch calendar
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-      <StreamSetupDialog
-        open={setupOpen}
-        onOpenChange={setSetupOpen}
-        onConfirm={goLive}
-        traderHandle={trader.handle}
-      />
-      <div className="min-w-0 space-y-4">
+    <div className="space-y-4">
+      {/* Pot header + live controls */}
+      <div className="rounded-xl border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold">Go live</h2>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Stream your chart, talk through entries, and pull followers into your pots.
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-bold">{pot.strategy?.title ?? "Pot"}</h2>
+              <EpochPhaseBadge phase={epochStatus} />
+              {live && (
+                <span className="flex items-center gap-1 rounded bg-down/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-down">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-down" /> Live
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              NAV {formatUsd(pot.nav)} · Cash {formatUsd(pot.cash)} · At work{" "}
+              {pot.nav > 0 ? `${Math.round((pot.deployed / pot.nav) * 100)}%` : "—"}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onGoLiveClick}
-            className={cn(
-              "flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white transition-all duration-150 active:translate-y-[3px] active:shadow-none",
-              live
-                ? "bg-down shadow-block-down hover:brightness-110"
-                : "bg-primary shadow-block-primary hover:brightness-110",
+          <div className="flex items-center gap-2">
+            {live ? (
+              <button
+                type="button"
+                onClick={() => onToggleLive(false)}
+                className="flex items-center gap-1.5 rounded-lg bg-down px-4 py-2 text-sm font-semibold text-down-foreground shadow-block-down transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+              >
+                <Radio className="h-4 w-4" /> End stream
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSetupOpen(true)}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+              >
+                <Radio className="h-4 w-4" /> Start live trade
+              </button>
             )}
-          >
-            <Radio className="h-4 w-4" /> {live ? "End stream" : "Go live"}
-          </button>
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-border bg-card">
-          <div className="relative border-b border-border bg-gradient-to-b from-secondary/30 to-transparent p-5">
-            {!live && (
-              <div className="absolute inset-0 z-10 grid place-items-center bg-background/60 backdrop-blur-sm">
-                <div className="text-center">
-                  <Signal className="mx-auto h-8 w-8 text-muted-foreground" />
-                  <p className="mt-2 text-sm font-medium text-muted-foreground">
-                    You're offline — hit Go live when you're ready.
-                  </p>
-                </div>
-              </div>
-            )}
-            {live && (
-              <span className="absolute left-4 top-4 z-10 flex items-center gap-1.5 rounded-full bg-down px-2.5 py-1 text-xs font-bold uppercase text-down-foreground">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-down-foreground" />
-                On air · <span className="num">{mmss}</span>
-              </span>
-            )}
-            <LiveVideoPlayer room={room} className="h-[340px]" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 p-4">
-            <ControlBtn
-              on={cam}
-              onClick={() => setCam((v) => !v)}
-              onIcon={<Video className="h-4 w-4" />}
-              offIcon={<VideoOff className="h-4 w-4" />}
-              label="Camera"
-            />
-            <ControlBtn
-              on={mic}
-              onClick={() => setMic((v) => !v)}
-              onIcon={<Mic className="h-4 w-4" />}
-              offIcon={<MicOff className="h-4 w-4" />}
-              label="Mic"
-            />
-            <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
-              <Eye className="h-4 w-4" />
-              <span className="num text-foreground">{viewers}</span> viewers
-            </div>
           </div>
         </div>
+      </div>
 
-        <div className="rounded-xl border border-border bg-card p-4">
-          <label className="text-sm font-semibold" htmlFor="stream-title">
-            Stream title
-          </label>
+      {/* Search bar */}
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            id="stream-title"
-            value={streamTitle}
-            onChange={(e) => setStreamTitle(e.target.value)}
-            placeholder="What are you trading today?"
-            className="mt-2 w-full rounded-lg border border-border bg-secondary/50 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search markets... BTC, ETH, or question keywords"
+            className="w-full rounded-lg border border-border bg-card py-2.5 pl-10 pr-4 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
           />
-          {live && (
-            <Link
-              to="/live/$id"
-              params={{ id: trader.id }}
-              className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-link hover:underline"
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
-              Open public stream view <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+              <X className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
 
-      <LiveChat className="h-[560px]" />
+      {/* Main layout: Markets grid + Trade panel */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
+        {/* Left: Markets grid */}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {filteredMarkets.map((m) => {
+              const expiryMs = m.expiry ? new Date(m.expiry).getTime() : undefined;
+              return (
+                <MarketCard
+                  key={m.id}
+                  symbol={m.symbol ?? ""}
+                  question={m.question}
+                  strike={m.strike}
+                  expiryMs={expiryMs}
+                  upPrice={Number(m.upPrice)}
+                  downPrice={Number(m.downPrice)}
+                  volume={Number(m.volume)}
+                  status={m.status}
+                  onClick={() => setMarketId(m.id)}
+                  className={cn(
+                    marketId === m.id && "ring-2 ring-primary/50",
+                  )}
+                />
+              );
+            })}
+          </div>
+
+          {/* Positions */}
+          {(Array.isArray(positions) ? positions : []).length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h4 className="mb-2 text-sm font-semibold">Open Positions</h4>
+              <PositionTable
+                positions={(Array.isArray(positions) ? positions : []).map((p: any) => {
+                  const mkt = tradingMarkets.find((m) => m.id === p.marketId);
+                  return {
+                    ...p,
+                    symbol: mkt?.symbol ?? p.symbol ?? "Unknown",
+                  };
+                })}
+                currentPrices={Object.fromEntries(
+                  tradingMarkets.map((m) => [
+                    m.id,
+                    { up: Number(m.upPrice), down: Number(m.downPrice) },
+                  ]),
+                )}
+                onCashout={async (marketId, side, sizeUsd) => {
+                  if (!pot) throw new Error("No tradable pot");
+                  const res = await trade.mutateAsync({
+                    potId: pot.id,
+                    marketId,
+                    side,
+                    sizeUsd,
+                  });
+                  toast.success(`Cashout: ${res.filled.toFixed(2)} filled @ $${res.price.toFixed(3)}`);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Recent trades */}
+          {(Array.isArray(trades) ? trades : []).length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h4 className="mb-2 text-sm font-semibold">Recent Trades</h4>
+              <div className="max-h-48 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-muted-foreground">
+                      <th className="pb-1 pr-2 text-left font-semibold">Market</th>
+                      <th className="pb-1 pr-2 text-left font-semibold">Side</th>
+                      <th className="pb-1 pr-2 text-right font-semibold">Qty</th>
+                      <th className="pb-1 text-right font-semibold">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(Array.isArray(trades) ? trades : []).slice(0, 10).map((t: any) => {
+                      const mkt = tradingMarkets.find((m) => m.id === t.marketId);
+                      return (
+                        <tr key={t.id} className="border-t border-border/30">
+                          <td className="py-1.5 pr-2 text-muted-foreground">{mkt?.symbol?.split("-")[0] ?? "—"}</td>
+                          <td className={cn("py-1.5 pr-2 font-semibold capitalize", t.side?.includes("up") ? "text-up" : "text-down")}>
+                            {t.side?.replace("_", " ") ?? "—"}
+                          </td>
+                          <td className="py-1.5 pr-2 text-right tabular-nums">{Number(t.quantity).toFixed(2)}</td>
+                          <td className="py-1.5 text-right tabular-nums">${Number(t.price).toFixed(3)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Trade panel + Stream */}
+        <div className="space-y-4">
+          {selectedMarket ? (
+            <TradePanel
+              symbol={selectedMarket.symbol ?? ""}
+              question={selectedMarket.question}
+              upPrice={Number(selectedMarket.upPrice)}
+              downPrice={Number(selectedMarket.downPrice)}
+              cash={Number(pot?.cash ?? 0)}
+              isPending={trade.isPending}
+              onSubmit={onTrade}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center">
+              <p className="text-sm text-muted-foreground">Select a market to trade</p>
+              <p className="mt-1 text-xs text-muted-foreground/70">Click any market card on the left</p>
+            </div>
+          )}
+
+          {/* Stream */}
+          <div className={cn(fullscreen && "fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4")}>
+            <div className={cn("relative rounded-xl overflow-hidden", fullscreen ? "h-full w-full max-w-4xl" : "h-56")}>
+              <LiveVideoPlayer room={room} className={fullscreen ? "h-full w-full" : "h-56"} />
+              <button
+                type="button"
+                onClick={() => setFullscreen((v) => !v)}
+                className="absolute right-2 top-2 z-20 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
+                aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
+              >
+                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Live chat */}
+      <LiveChat className="h-[420px]" />
     </div>
   );
 }
 
 function FollowersSection({ trader }: { trader: any }) {
-  const followerCount = trader.followers ?? 0;
-
   return (
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold">Followers</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          {fmtFollowers(followerCount)} people follow you.
+          {fmtFollowers(trader.followers ?? 0)} people follow you.
         </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-1">
-        <StatCard label="Total" value={fmtFollowers(followerCount)} hint="All-time follows" />
+        <StatCard label="Total" value={fmtFollowers(trader.followers ?? 0)} hint="All-time follows" />
       </div>
 
       <ul className="divide-y divide-border rounded-xl border border-border bg-card">
@@ -1018,35 +812,6 @@ function QuickAction({
     >
       <p className="text-sm font-bold">{title}</p>
       <p className="mt-1 text-xs text-muted-foreground">{body}</p>
-    </button>
-  );
-}
-
-function ControlBtn({
-  on,
-  onClick,
-  onIcon,
-  offIcon,
-  label,
-}: {
-  on: boolean;
-  onClick: () => void;
-  onIcon: React.ReactNode;
-  offIcon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-        on
-          ? "bg-secondary/70 text-foreground hover:bg-secondary"
-          : "bg-down/15 text-down hover:bg-down/20",
-      )}
-    >
-      {on ? onIcon : offIcon} {label}
     </button>
   );
 }

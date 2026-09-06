@@ -188,7 +188,6 @@ function serializePot(pot: any) {
     traderId: pot.traderId,
     epochId: pot.epochId,
     strategy: pot.strategy,
-    status: pot.status,
     cash: Number(pot.cash),
     nav: Number(pot.nav),
     deployed: Number(pot.deployed),

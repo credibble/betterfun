@@ -3,6 +3,7 @@ import { z } from "zod";
 import { type DataSource } from "typeorm";
 import { env } from "../../config/env.js";
 import { Pot } from "../pots/pot.entity.js";
+import { Epoch } from "../epochs/epoch.entity.js";
 import { loadLiveBinaryMarkets, fetchPrice, fetchOrderBook } from "../dreamdex/market.service.js";
 import { TradingService } from "../trading/trading.service.js";
 import { logger } from "../../lib/logger.js";
@@ -41,10 +42,12 @@ export class AiAgentService {
   private openai: OpenAI | null = null;
   private tradingService: TradingService;
   private potRepo;
+  private epochRepo;
 
   constructor(dataSource: DataSource) {
     this.tradingService = new TradingService(dataSource);
     this.potRepo = dataSource.getRepository(Pot);
+    this.epochRepo = dataSource.getRepository(Epoch);
     if (env.OPENAI_API_KEY) {
       this.openai = new OpenAI({ apiKey: env.OPENAI_API_KEY, baseURL: env.OPENAI_URL });
     }
@@ -64,7 +67,8 @@ export class AiAgentService {
     try {
       const pot = await this.potRepo.findOne({ where: { id: potId } });
       if (!pot) return null;
-      if (pot.status !== "live") return null;
+      const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
+      if (!epoch || epoch.status !== "live") return null;
 
       const caps = RISK_CAPS[pot.strategy?.risk ?? "balanced"];
       const cash = Number(pot.cash);
@@ -178,7 +182,6 @@ Decide the single best trade (or hold). Output only valid JSON.`;
         side: decision.side as "buy_up" | "buy_down",
         sizeUsd,
         maxPrice: yesCap,
-        orderType: "ioc",
       });
 
       logger.info(`AI trade executed: ${decision.side} ${result.filled} contracts for pot ${potId} (${decision.rationale})`);

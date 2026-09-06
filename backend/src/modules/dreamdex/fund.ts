@@ -4,7 +4,7 @@ import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
-const MIN_GAS = "0.005"; // STT — enough for a handful of writes
+const MIN_GAS = "0.2"; // STT — enough for approve + placeOrder with 10 gwei fees
 
 const publicClient = createPublicClient({ chain: somniaShannon as any, transport: http() });
 
@@ -28,7 +28,7 @@ export async function ensureGas(to: string): Promise<void> {
 
     const account = privateKeyToAccount(funderKey);
     const funderBalance = await publicClient.getBalance({ address: account.address });
-    if (funderBalance < parseEther("0.05")) {
+    if (funderBalance < parseEther("2.0")) {
       throw new Error(`Gas funder ${account.address} has insufficient STT (${funderBalance}).`);
     }
 

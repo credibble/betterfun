@@ -3,9 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   useMarkets as useSdkMarkets,
   useCandles as useSdkCandles,
-  useLiveSpotOrderBook,
   useLiveBinaryOrderBook,
   useLivePrice,
+  useLivePriceTicks,
 } from "@somnia-chain/markets-sdk/react";
 import { api } from "./api-client";
 import { sdkMarketsToApi } from "./market-adapter";
@@ -126,7 +126,7 @@ export function useRestPrice(asset: "BTC" | "ETH") {
 // ── Markets (via SDK) ─────────────────────────────────────────────────────────
 
 export function useMarkets() {
-  const sdk = useSdkMarkets({ limit: 200 });
+  const sdk = useSdkMarkets({ limit: 200, refetchInterval: 10_000 });
   const data = useMemo(
     () => (sdk.data ? sdkMarketsToApi(sdk.data) : []),
     [sdk.data],
@@ -168,6 +168,10 @@ export function usePrice(asset: string) {
   return {
     data: price ? { asset, price: price.price } : undefined,
   };
+}
+
+export function usePriceTicks(asset: string, limit = 120) {
+  return useLivePriceTicks(asset.toUpperCase(), limit);
 }
 
 // ── EpochSchemas ────────────────────────────────────────────────────────────────────
@@ -273,7 +277,6 @@ export function useTrade() {
       side: "buy_up" | "buy_down" | "sell_up" | "sell_down";
       sizeUsd: number;
       maxPrice?: number;
-      orderType?: "ioc" | "post_only" | "limit";
     }) =>
       api<{ orderId: string; filled: number; price: number }>("/studio/trade", {
         method: "POST",
@@ -291,6 +294,7 @@ export function usePositions(potId: string) {
     queryKey: ["trades", "positions", potId],
     queryFn: () => api<PositionSchema[]>(`/studio/positions?potId=${potId}`),
     enabled: !!potId,
+    refetchInterval: 10_000,
   });
 }
 
@@ -299,31 +303,7 @@ export function useTrades(potId: string) {
     queryKey: ["trades", potId],
     queryFn: () => api<any[]>(`/studio/trades?potId=${potId}`),
     enabled: !!potId,
-  });
-}
-
-export function useOrders(potId: string) {
-  return useQuery({
-    queryKey: ["orders", potId],
-    queryFn: () => api<any[]>(`/studio/orders?potId=${potId}`),
-    enabled: !!potId,
     refetchInterval: 10_000,
-  });
-}
-
-export function useCancelOrder() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { potId: string; orderId: string }) =>
-      api<{ ok: boolean }>("/studio/cancel", {
-        method: "POST",
-        body: JSON.stringify(input),
-      }),
-    onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ["orders", vars.potId] });
-      qc.invalidateQueries({ queryKey: ["trades"] });
-      qc.invalidateQueries({ queryKey: ["pots", vars.potId] });
-    },
   });
 }
 
@@ -447,6 +427,22 @@ export function useUpdateTrader() {
     onSuccess: (data) => {
       qc.setQueryData(["traders", "me"], data);
       qc.invalidateQueries({ queryKey: ["traders"] });
+    },
+  });
+}
+
+export function useSetLive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (isLive: boolean) =>
+      api<TraderProfileSchema>("/traders/me/live", {
+        method: "PATCH",
+        body: JSON.stringify({ isLive }),
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(["traders", "me"], data);
+      qc.invalidateQueries({ queryKey: ["traders"] });
+      qc.invalidateQueries({ queryKey: ["traders", "me"] });
     },
   });
 }

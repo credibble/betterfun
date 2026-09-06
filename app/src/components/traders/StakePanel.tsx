@@ -18,6 +18,7 @@ import {
   usePayout,
   useClaimPayout,
   usePot,
+  useEpoch,
 } from "@/lib/queries";
 import { TUSDC_TOKEN, TUSDC_ABI } from "@/lib/chains";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -29,13 +30,13 @@ function formatUsd(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
-function potPhase(potStatus?: string): string {
-  switch (potStatus) {
-    case "funding": return "Funding open";
+function potPhase(epochStatus?: string): string {
+  switch (epochStatus) {
+    case "upcoming": return "Funding open";
     case "live": return "Live";
     case "settling": return "Settling";
     case "settled": return "Settled";
-    default: return potStatus ?? "";
+    default: return epochStatus ?? "";
   }
 }
 
@@ -58,7 +59,6 @@ export function StakePanel({
   const potList = Array.isArray(pots) ? pots : [];
   const potId =
     potProp?.id ??
-    potList.find((p) => p.traderId === trader.id && p.status === "funding")?.id ??
     potList.find((p) => p.traderId === trader.id)?.id;
   const { data: potData } = usePot(potId ?? "");
   const pot = potProp ?? potData;
@@ -66,6 +66,7 @@ export function StakePanel({
   const { data: me } = useMe();
   const { data: shares } = usePotShares(pot?.id);
   const { data: payout } = usePayout(pot?.id ?? "");
+  const { data: epoch } = useEpoch(preferredEpochId ?? pot?.epochId ?? "");
 
   const myShare = shares?.find((s) => me?.id && s.userId === me.id);
   const staked = myShare?.investedUsd ?? 0;
@@ -158,8 +159,8 @@ export function StakePanel({
       toast.error("No pot available yet");
       return;
     }
-    if (pot.status !== "funding") {
-      toast.error("Staking closed", { description: `${potPhase(pot.status)} — stake only while funding is open.` });
+    if (epoch?.status !== "upcoming") {
+      toast.error("Staking closed", { description: `${potPhase(epoch?.status)} — stake only while funding is open.` });
       return;
     }
     try {
@@ -182,7 +183,7 @@ export function StakePanel({
       toast.error("No pot available");
       return;
     }
-    if (pot.status !== "funding") {
+    if (epoch?.status !== "upcoming") {
       toast.error("Withdraw closed", { description: "You can only withdraw before the epoch locks." });
       return;
     }
@@ -210,7 +211,7 @@ export function StakePanel({
       toast.error("No pot available");
       return;
     }
-    if (pot.status !== "settled") {
+    if (epoch?.status !== "settled") {
       toast.error("Pot not settled yet");
       return;
     }
@@ -242,9 +243,8 @@ export function StakePanel({
   };
 
   const tabs =
-    pot?.status === "settled"
-      ? ([{ value: "claim" as const, label: "Claim" }]
-        ) 
+    epoch?.status === "settled"
+      ? ([{ value: "claim" as const, label: "Claim" }]) 
       : ([
           { value: "stake" as const, label: "Stake" },
           { value: "unstake" as const, label: "Withdraw" },
@@ -266,7 +266,7 @@ export function StakePanel({
         <div className="mb-4 space-y-3">
           <div className="rounded-lg border border-border bg-secondary/20 p-3 text-xs">
             <div className="flex items-center justify-between">
-              <span className="font-semibold text-foreground">{potPhase(pot.status)}</span>
+              <span className="font-semibold text-foreground">{potPhase(epoch?.status)}</span>
               <span className="rounded-md bg-primary/15 px-1.5 py-0.5 font-bold text-primary">
                 NAV {formatUsd(pot.nav)}
               </span>
@@ -339,11 +339,11 @@ export function StakePanel({
 
       <ActionPairTabs className="mb-4" value={mode} onChange={setMode} options={tabs} />
 
-      {pot && pot.status !== "funding" && mode !== "claim" && (
+      {pot && epoch?.status !== "upcoming" && mode !== "claim" && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-foreground">
-          <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
+          <Lock className="mt-0.5 h-3.5 shrink-0 text-warn" />
           <p>
-            {potPhase(pot.status)} — stakes are locked until the pot settles.{" "}
+            {potPhase(epoch?.status)} — stakes are locked until the pot settles.{" "}
             <Link to="/epochs" className="font-semibold text-link hover:underline">
               View epochs
             </Link>

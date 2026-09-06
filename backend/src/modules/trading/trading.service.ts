@@ -1,14 +1,15 @@
 import { type DataSource } from "typeorm";
 import { v4 as uuid } from "uuid";
+import { maxUint256 } from "viem";
 import { ORDER_TYPE, type SomniaMarkets, type MarketOnchain } from "@somnia-chain/markets-sdk";
 import { Pot } from "../pots/pot.entity.js";
+import { Epoch } from "../epochs/epoch.entity.js";
 import { Position } from "./position.entity.js";
 import { Order } from "./order.entity.js";
 import { Trade } from "./trade.entity.js";
 import { createTradingExchange } from "../dreamdex/exchange.js";
 import { derivePotKey } from "../dreamdex/keys.js";
 import { ensureGas } from "../dreamdex/fund.js";
-import { env } from "../../config/env.js";
 import { broadcast } from "../realtime/ws-hub.js";
 import { logger } from "../../lib/logger.js";
 
@@ -74,11 +75,10 @@ function qtyToRaw(humanQty: number, decimals: number, lotSize: bigint, minQuanti
 const NS_PER_SEC = 1_000_000_000n;
 
 /** Expiry in ns, capped at market expiry. Uses a 300s dead-man's switch. */
-function orderExpiryNs(onchain: MarketOnchain, expiresInSec = 300): bigint {
-  const nowNs = BigInt(Date.now()) * NS_PER_SEC;
-  const marketExpiryNs = onchain.expiry * NS_PER_SEC; // expiry is unix seconds on-chain
+function orderExpiryNs(poolExpiryNs: bigint, expiresInSec = 300): bigint {
+  const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
   const want = nowNs + BigInt(expiresInSec) * NS_PER_SEC;
-  return want < marketExpiryNs ? want : marketExpiryNs;
+  return want < poolExpiryNs ? want : poolExpiryNs;
 }
 
 interface PlacedFill {
@@ -88,12 +88,14 @@ interface PlacedFill {
 
 export class TradingService {
   private potRepo;
+  private epochRepo;
   private positionRepo;
   private orderRepo;
   private tradeRepo;
 
   constructor(private dataSource: DataSource) {
     this.potRepo = dataSource.getRepository(Pot);
+    this.epochRepo = dataSource.getRepository(Epoch);
     this.positionRepo = dataSource.getRepository(Position);
     this.orderRepo = dataSource.getRepository(Order);
     this.tradeRepo = dataSource.getRepository(Trade);
@@ -110,20 +112,25 @@ export class TradingService {
     side: "buy_up" | "buy_down" | "sell_up" | "sell_down";
     sizeUsd: number;
     maxPrice?: number;
-    orderType?: "ioc" | "post_only" | "limit";
     expiresInSec?: number;
   }): Promise<{ orderId: string; filled: number; price: number }> {
     return withPotLock(input.potId, async () => {
       const pot = await this.potRepo.findOne({ where: { id: input.potId } });
       if (!pot) throw new Error("Pot not found");
-      if (pot.status !== "live") throw new Error("Pot is not in live status");
+
+      // Tradability is determined by the epoch, not the pot row.
+      const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
+      if (!epoch || epoch.status !== "live") {
+        throw new Error("Pot's epoch is not live");
+      }
 
       // The pot signer needs native STT gas to sign orders.
       await ensureGas(pot.signerAddress);
 
       // Risk caps
       if (input.sizeUsd <= 0) throw new Error("sizeUsd must be positive");
-      if (input.sizeUsd > Number(pot.cash)) {
+      const isBuy = input.side.startsWith("buy");
+      if (isBuy && input.sizeUsd > Number(pot.cash)) {
         throw new Error(`Insufficient cash: ${pot.cash} USDC available, ${input.sizeUsd} requested`);
       }
 
@@ -145,24 +152,24 @@ export class TradingService {
       const decimals = onchain.decimals ?? 6;
       const params = await exchange.client.getBinaryBookParams(onchain.pool);
 
-      // Price cap: buys pay at most maxPrice (or the ask); sells accept at least maxPrice.
+      // IOC (orderType=2) MUST cross the spread or the pool reverts.
+      // The SDK's `price` parameter is ALWAYS in YES terms, regardless of side.
+      // For BUY_YES: price = max YES price we'll pay (e.g. 0.99 = cross up to 99c YES ask)
+      // For BUY_NO:  price = 1 − max NO price (e.g. buying NO at ≤0.99 means YES price ≤ 0.01)
+      // For SELL_YES: price = min YES price we'll accept (e.g. 0.01 = accept down to 1c YES bid)
+      // For SELL_NO:  price = 1 − min NO price (e.g. selling NO at ≥0.01 means YES price ≥ 0.99)
       const binarySide = SIDE_TO_BINARY[input.side];
-      const isBuy = binarySide.startsWith("BUY");
+      const isNo = binarySide.endsWith("_NO");
 
-      let executionPrice = input.maxPrice ?? 0.5;
-      if (input.maxPrice == null) {
-        try {
-          const book = await exchange.fetchOrderBook(input.marketId, 1);
-          const bestBid = book.bids?.[0]?.[0];
-          const bestAsk = book.asks?.[0]?.[0];
-          if (isBuy && bestAsk != null) executionPrice = bestAsk;
-          else if (!isBuy && bestBid != null) executionPrice = bestBid;
-        } catch {
-          executionPrice = 0.5;
-        }
+      let executionPrice: number;
+      if (input.maxPrice != null) {
+        // User-supplied maxPrice is in the outcome's own terms (NO price for BUY_NO/SELL_NO).
+        // Convert to YES terms for the SDK.
+        executionPrice = isNo ? 1 - input.maxPrice : input.maxPrice;
+      } else {
+        // Wide cap/floor: cross the entire book.
+        executionPrice = isBuy ? (isNo ? 0.01 : 0.99) : (isNo ? 0.99 : 0.01);
       }
-      if (isBuy) executionPrice = Math.min(0.99, Math.max(0.01, executionPrice));
-      else executionPrice = Math.min(0.99, Math.max(0.01, executionPrice));
 
       const rawPrice = priceToRaw(executionPrice, decimals, params.tickSize, !isBuy);
       const rawQty = qtyToRaw(input.sizeUsd, decimals, params.lotSize, params.minQuantity);
@@ -183,39 +190,44 @@ export class TradingService {
         }
       }
 
-      const orderType =
-        input.orderType === "post_only"
-          ? ORDER_TYPE.POST_ONLY
-          : input.orderType === "limit"
-            ? ORDER_TYPE.LIMIT
-            : ORDER_TYPE.MARKET; // IOC
+      // SDK handles approve + operator via autoApprove: true.
+      await ensureGas(pot.signerAddress);
 
-      const result = await exchange.trader.placeOrder({
+      // Place order via SDK (uses realtime_sendRawTransaction which works on Somnia).
+      // The SDK handles approve + sign + broadcast internally.
+      const sdkResult = await exchange.trader.placeOrder({
         pool: onchain.pool,
-        side: binarySide,
+        side: binarySide as any,
         price: rawPrice,
         quantity: rawQty,
-        outcomeToken: onchain.outcomeToken,
-        yesId: onchain.yesId,
-        noId: onchain.noId,
-        orderType,
-        expireTimestampNs: orderExpiryNs(onchain, input.expiresInSec),
+        orderType: ORDER_TYPE.MARKET,
+        autoApprove: true,
       });
 
-      if (result.receipt?.status === "reverted") {
-        throw new Error(`Order reverted on chain: ${input.marketId}`);
-      }
+      const result = {
+        hash: sdkResult.hash ?? "",
+        orderId: sdkResult.orderId ?? null,
+        fills: (sdkResult.fills ?? []).map((f: any) => ({
+          takerOrderId: f.takerOrderId,
+          makerOrderId: f.makerOrderId,
+          quantityFilled: f.quantityFilled,
+          fillPrice: f.fillPrice,
+          takerRemainingQuantity: f.takerRemainingQuantity,
+          makerRemainingQuantity: f.makerRemainingQuantity,
+        })),
+      };
 
       const totalFilledRaw = result.fills.reduce((sum, f) => sum + f.quantityFilled, 0n);
       const totalFilled = Number(totalFilledRaw) / 10 ** decimals;
 
-      // Weighted-average fill price in YES terms.
+      // Weighted-average fill price in YES terms (0-1 human scale).
       let yesPrice = executionPrice;
       if (result.fills.length > 0) {
-        const weighted = result.fills.reduce((acc, f) => acc + Number(f.quantityFilled) * (Number(f.fillPrice) / 10 ** decimals), 0);
+        const weighted = result.fills.reduce((acc, f) => acc + (Number(f.quantityFilled) / 10 ** decimals) * (Number(f.fillPrice) / 10 ** decimals), 0);
         if (totalFilledRaw > 0n) yesPrice = weighted / (Number(totalFilledRaw) / 10 ** decimals);
       }
-      const costPerContract = isBuy ? yesPrice : 1 - yesPrice;
+      // costPerContract is the price in the outcome's own terms (NO price for BUY_NO/SELL_NO).
+      const costPerContract = isNo ? 1 - yesPrice : yesPrice;
 
       const filled = totalFilled;
       const status: Order["status"] =
@@ -233,7 +245,7 @@ export class TradingService {
         filled,
         side: input.side,
         status,
-        expiresAtNs: String(orderExpiryNs(onchain, input.expiresInSec)),
+        expiresAtNs: String(onchain.expiry * 1_000_000_000n),
       });
       await this.orderRepo.save(dbOrder);
 
@@ -250,16 +262,22 @@ export class TradingService {
         });
         await this.tradeRepo.save(dbTrade);
 
-        await this.applyFill(pot, input, filled, yesPrice, isBuy);
+        const fillResult = await this.applyFill(pot, input, filled, yesPrice, isBuy);
 
-        // Update pot cash/deployed
-        const value = filled * (isBuy ? yesPrice : 1 - yesPrice);
+        // Update pot cash/deployed/nav/lpPrice
+        // costPerContract is always in the outcome's own terms (NO price for NO sides, YES price for YES sides)
+        const costPerContract = isNo ? 1 - yesPrice : yesPrice;
+        const value = filled * costPerContract;
         if (isBuy) {
           pot.cash = Number(pot.cash) - value;
           pot.deployed = Number(pot.deployed) + value;
         } else {
           pot.cash = Number(pot.cash) + value;
-          pot.deployed = Math.max(0, Number(pot.deployed) - value);
+          pot.deployed = Math.max(0, Number(pot.deployed) - fillResult.deployedDelta);
+        }
+        pot.nav = Number(pot.cash) + Number(pot.deployed);
+        if (Number(pot.sharesOutstanding) > 0) {
+          pot.lpPrice = Number(pot.nav) / Number(pot.sharesOutstanding);
         }
         await this.potRepo.save(pot);
 
@@ -305,9 +323,10 @@ export class TradingService {
     filled: number,
     yesPrice: number,
     isBuy: boolean,
-  ): Promise<void> {
+  ): Promise<{ deployedDelta: number }> {
     const side: "up" | "down" = input.side.includes("up") ? "up" : "down";
-    const costPerContract = isBuy ? yesPrice : 1 - yesPrice;
+    const isNo = input.side.includes("down");
+    const costPerContract = isNo ? 1 - yesPrice : yesPrice;
 
     let position = await this.positionRepo.findOne({
       where: { potId: pot.id, marketId: input.marketId, side },
@@ -353,6 +372,7 @@ export class TradingService {
           updatedAt: position.updatedAt.toISOString(),
         },
       });
+      return { deployedDelta: value };
     } else {
       if (!position) throw new Error("Cannot sell: no open position on this side");
       const closing = Math.min(Number(position.contracts), filled);
@@ -364,42 +384,9 @@ export class TradingService {
         position.contracts = 0;
       }
       await this.positionRepo.save(position);
+      // Return cost basis of sold contracts for deployed tracking
+      return { deployedDelta: closing * Number(position.avgPrice) };
     }
-  }
-
-  /**
-   * Cancel a resting order by its on-chain id for a pot.
-   */
-  async cancelOrder(input: { potId: string; orderId: string }): Promise<{ ok: boolean }> {
-    return withPotLock(input.potId, async () => {
-      const order = await this.orderRepo.findOne({ where: { id: input.orderId, potId: input.potId } });
-      if (!order) throw new Error("Order not found");
-      if (!order.exchangeOrderId) throw new Error("Order has no on-chain id");
-      if (order.status === "cancelled" || order.status === "filled" || order.status === "expired") {
-        throw new Error(`Order already ${order.status}`);
-      }
-
-      const pot = await this.potRepo.findOne({ where: { id: input.potId } });
-      if (!pot) throw new Error("Pot not found");
-
-      const exchange = getOrCreateExchange(pot.signerIndex);
-      if (!exchangeCache.has(pot.signerIndex)) {
-        await exchange.loadMarkets(true);
-      }
-
-      const onchain = await exchange.client.getMarketOnchain(order.marketId as `0x${string}`);
-      const res = await exchange.trader.cancelOrder({
-        pool: onchain.pool,
-        orderId: BigInt(order.exchangeOrderId),
-      });
-      if (res.receipt?.status === "reverted") {
-        throw new Error("Cancel reverted on chain");
-      }
-
-      order.status = "cancelled";
-      await this.orderRepo.save(order);
-      return { ok: true };
-    });
   }
 
   /**
@@ -424,15 +411,87 @@ export class TradingService {
   }
 
   /**
-   * Get orders for a pot (open + recent).
+   * One-time fix: correct avgPrice for existing "down" positions that were
+   * stored with the wrong formula (YES price instead of NO price).
+   * Recalculates from trade history and fixes pot accounting.
    */
-  async getOrders(potId: string, status?: Order["status"]): Promise<Order[]> {
-    const where: Record<string, unknown> = { potId };
-    if (status) where.status = status;
-    return this.orderRepo.find({
-      where,
-      order: { createdAt: "DESC" },
-      take: 100,
+  static async fixDownPositionAvgPrices(dataSource: DataSource): Promise<void> {
+    const positionRepo = dataSource.getRepository(Position);
+    const tradeRepo = dataSource.getRepository(Trade);
+    const potRepo = dataSource.getRepository(Pot);
+    const badPositions = await positionRepo.find({
+      where: { side: "down", status: "open" },
     });
+
+    // Group by pot to fix pot accounting
+    const potsToFix = new Map<string, { positions: Position[]; trades: Trade[] }>();
+
+    let fixed = 0;
+    for (const pos of badPositions) {
+      // Recalculate avgPrice from trade history for this position
+      const trades = await tradeRepo.find({
+        where: { potId: pos.potId, marketId: pos.marketId, side: "buy_down" },
+        order: { ts: "ASC" },
+      });
+
+      if (trades.length === 0) continue;
+
+      // Sum up weighted cost: each trade's cost = filled * (1 - yesPrice)
+      // because the old code stored yesPrice but should have stored 1 - yesPrice
+      let totalCost = 0;
+      let totalContracts = 0;
+      for (const t of trades) {
+        const filled = Number(t.quantity);
+        const yesPrice = Number(t.price);
+        // Old code used yesPrice as costPerContract for buy_down (wrong)
+        // Correct cost is 1 - yesPrice (NO price)
+        totalCost += filled * (1 - yesPrice);
+        totalContracts += filled;
+      }
+
+      if (totalContracts > 0) {
+        const correctAvg = totalCost / totalContracts;
+        const oldAvg = Number(pos.avgPrice);
+        pos.avgPrice = correctAvg;
+        await positionRepo.save(pos);
+        fixed++;
+        logger.info(`Fixed down position ${pos.id}: avgPrice ${oldAvg} → ${correctAvg} (recalculated from ${trades.length} trades)`);
+
+        // Track pot for deployed recalculation
+        if (!potsToFix.has(pos.potId)) {
+          potsToFix.set(pos.potId, { positions: [], trades: [] });
+        }
+        potsToFix.get(pos.potId)!.positions.push(pos);
+        potsToFix.get(pos.potId)!.trades.push(...trades);
+      }
+    }
+
+    // Recalculate deployed for affected pots
+    for (const [potId, { positions }] of potsToFix) {
+      const pot = await potRepo.findOne({ where: { id: potId } });
+      if (!pot) continue;
+
+      // Recalculate deployed as sum of (contracts * avgPrice) for all open positions
+      const allOpen = await positionRepo.find({
+        where: { potId, status: "open" },
+      });
+      let newDeployed = 0;
+      for (const p of allOpen) {
+        newDeployed += Number(p.contracts) * Number(p.avgPrice);
+      }
+
+      const oldDeployed = Number(pot.deployed);
+      pot.deployed = newDeployed;
+      pot.nav = Number(pot.cash) + newDeployed;
+      if (Number(pot.sharesOutstanding) > 0) {
+        pot.lpPrice = Number(pot.nav) / Number(pot.sharesOutstanding);
+      }
+      await potRepo.save(pot);
+      logger.info(`Recalculated pot ${potId}: deployed ${oldDeployed} → ${newDeployed}, nav → ${pot.nav}, lpPrice → ${pot.lpPrice}`);
+    }
+
+    if (fixed > 0) {
+      logger.info(`Fixed ${fixed} down positions with wrong avgPrice`);
+    }
   }
 }

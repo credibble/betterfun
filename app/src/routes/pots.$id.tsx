@@ -7,7 +7,7 @@ import { StakePanel } from "@/components/traders/StakePanel";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
-import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe } from "@/lib/queries";
+import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe, useTraders, usePots } from "@/lib/queries";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/clipboard";
 
@@ -43,7 +43,24 @@ export const Route = createFileRoute("/pots/$id")({
 
 function PotDetailPage() {
   const { id } = Route.useParams();
-  const { data: pot, isLoading, error } = usePot(id);
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+  // The slug is the trader's handle; resolve it to their current pot.
+  const { data: potById, isLoading: potByIdLoading } = usePot(isUuid ? id : "");
+  const { data: traders = [], isLoading: tradersLoading } = useTraders();
+  const handleTrader = !isUuid
+    ? (Array.isArray(traders) ? traders : []).find((t) => t.handle === id)
+    : undefined;
+  const { data: potsByTrader = [], isLoading: potsLoading } = usePots(
+    handleTrader ? { traderId: handleTrader.id } : undefined,
+  );
+  const potByHandle = handleTrader
+    ? (Array.isArray(potsByTrader) ? potsByTrader : [])[0]
+    : undefined;
+
+  const pot = isUuid ? potById : potByHandle;
+  const isLoading = isUuid ? potByIdLoading : tradersLoading || potsLoading;
+
   const { data: epoch } = useEpoch(pot?.epochId ?? "");
   const { data: trader } = useTrader(pot?.traderId ?? "");
   const { data: payout } = usePayout(pot?.id ?? "");
@@ -51,7 +68,7 @@ function PotDetailPage() {
   const { data: me } = useMe();
 
   const [copied, setCopied] = useState(false);
-  const name = trader?.name ?? "Trader";
+  const name = trader?.name ?? handleTrader?.name ?? "Trader";
   const hue = seedHue(pot?.traderId || pot?.id || "");
 
   const myShare = shares?.find((s) => me?.id && s.userId === me.id);
@@ -68,7 +85,7 @@ function PotDetailPage() {
     );
   }
 
-  if (error || !pot) {
+  if (!pot) {
     return (
       <div className="flex min-h-screen flex-col bg-background text-foreground">
         <Navbar />
@@ -120,7 +137,7 @@ function PotDetailPage() {
                       <span>{epoch ? `Epoch #${epoch.number}` : "Epoch pot"}</span>
                       <EpochPhaseBadge phase={epoch?.status as any} />
                       <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-xs font-semibold text-foreground">
-                        {pot.status}
+                        {epoch?.status ?? "unknown"}
                       </span>
                     </div>
                   </div>
@@ -191,7 +208,7 @@ function PotDetailPage() {
                     share
                   </li>
                 </ol>
-                {pot.status === "live" && (
+                {epoch?.status === "live" && (
                   <div className="mt-4 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2.5 text-xs">
                     <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
                     <p>
@@ -206,7 +223,7 @@ function PotDetailPage() {
               </div>
             )}
 
-            {pot.status === "settled" && (
+            {epoch?.status === "settled" && (
               <div className="rounded-xl border border-border bg-card p-5">
                 <h2 className="text-sm font-semibold">Settlement</h2>
                 {payout ? (

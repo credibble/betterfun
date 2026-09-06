@@ -90,7 +90,7 @@ export class EpochService {
     // traders can create pots and followers can deposit before it locks.
     const base = latest?.endsAt ? latest.endsAt.getTime() : Date.now();
     const startsAt = new Date(Math.max(base, Date.now() + env.EPOCH_FUNDING_WINDOW_MIN * 60 * 1000));
-    const endsAt = new Date(startsAt.getTime() + env.EPOCH_LENGTH_H * 60 * 60 * 1000);
+    const endsAt = new Date(startsAt.getTime() + env.EPOCH_LENGTH_MIN * 60 * 1000);
     const nextNumber = (latest?.number ?? 0) + 1;
 
     const epoch = await this.create({ number: nextNumber, startsAt, endsAt });

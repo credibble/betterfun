@@ -1,15 +1,18 @@
 import { type DataSource } from "typeorm";
 import { v4 as uuid } from "uuid";
 import { User } from "./user.entity.js";
+import { TraderProfile } from "../traders/trader-profile.entity.js";
 import { buildSiweMessage, verifySiweSignature } from "./siwe.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "./jwt.js";
 import { WalletAddress } from "@betterfun/shared";
 
 export class AuthService {
   private userRepo;
+  private traderRepo;
 
   constructor(private dataSource: DataSource) {
     this.userRepo = dataSource.getRepository(User);
+    this.traderRepo = dataSource.getRepository(TraderProfile);
   }
 
   /**
@@ -60,10 +63,15 @@ export class AuthService {
     user.nonce = newNonce;
     await this.userRepo.save(user);
 
+    // Detect existing trader profile so the JWT role is correct on every login.
+    const trader = await this.traderRepo.findOne({ where: { userId: user.id } });
+    const role: "user" | "trader" = trader ? "trader" : "user";
+
     const accessToken = signAccessToken({
       sub: user.id,
       address: user.walletAddress,
-      role: "user",
+      role,
+      ...(trader ? { traderId: trader.id } : {}),
     });
 
     const refreshToken = signRefreshToken(user.walletAddress);
@@ -85,10 +93,15 @@ export class AuthService {
       throw new Error("User not found");
     }
 
+    // Detect existing trader profile so the JWT role is correct on refresh.
+    const trader = await this.traderRepo.findOne({ where: { userId: user.id } });
+    const role: "user" | "trader" = trader ? "trader" : "user";
+
     const accessToken = signAccessToken({
       sub: user.id,
       address: user.walletAddress,
-      role: "user",
+      role,
+      ...(trader ? { traderId: trader.id } : {}),
     });
 
     const refreshToken = signRefreshToken(user.walletAddress);

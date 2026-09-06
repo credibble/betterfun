@@ -36,9 +36,6 @@ export type TraderType = z.infer<typeof TraderType>;
 export const EpochStatus = z.enum(["upcoming", "live", "settling", "settled"]);
 export type EpochStatus = z.infer<typeof EpochStatus>;
 
-export const PotStatus = z.enum(["funding", "live", "settling", "settled"]);
-export type PotStatus = z.infer<typeof PotStatus>;
-
 export const OrderSide = z.enum(["buy_up", "buy_down", "sell_up", "sell_down"]);
 export type OrderSide = z.infer<typeof OrderSide>;
 
@@ -125,7 +122,6 @@ export const PotSchema = z.object({
   traderId: z.string().uuid(),
   epochId: z.string().uuid(),
   strategy: PotStrategySchema,
-  status: PotStatus,
   cash: z.number().min(0),
   nav: z.number().min(0),
   deployed: z.number().min(0),
@@ -332,7 +328,6 @@ export const TradeRequest = z.object({
   side: OrderSide,
   sizeUsd: z.number().positive(),
   maxPrice: z.number().min(0).max(1).optional(),
-  orderType: z.enum(["ioc", "post_only", "limit"]).default("ioc"),
   expiresInSec: z.number().int().min(30).max(3600).optional(),
 });
 export type TradeRequest = z.infer<typeof TradeRequest>;

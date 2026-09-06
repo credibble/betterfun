@@ -1,16 +1,10 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import {
-  Briefcase,
   CalendarDays,
   ChevronDown,
-  DollarSign,
   Flame,
-  Gem,
-  Landmark,
   Layers,
-  LayoutDashboard,
-  LineChart,
   Menu,
   Radio,
   Rocket,
@@ -104,28 +98,6 @@ const navGroups: NavGroup[] = [
             icon: Rocket,
           },
           { label: "Trader Studio", desc: "Pots, go live & followers", to: "/studio", icon: Radio },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Portfolio",
-    sections: [
-      {
-        heading: "Your account",
-        items: [
-          {
-            label: "Positions",
-            desc: "Open trades and account balance",
-            to: "/portfolio",
-            icon: Briefcase,
-          },
-          {
-            label: "Hot topics",
-            desc: "What's moving right now",
-            to: "/hot-topics",
-            icon: LayoutDashboard,
-          },
         ],
       },
     ],

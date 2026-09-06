@@ -4,6 +4,7 @@ import { env } from "../../config/env.js";
 import { AppDataSource } from "../../db/data-source.js";
 import { EpochService } from "../epochs/epoch.service.js";
 import { PotService } from "../pots/pot.service.js";
+import { Pot } from "../pots/pot.entity.js";
 import { SettlementService } from "../settlement/settlement.service.js";
 import { AiAgentService } from "../ai/ai-agent.service.js";
 import { getReadExchange } from "../dreamdex/exchange.js";
@@ -17,6 +18,7 @@ const connection = new IORedis(env.REDIS_URL, { maxRetriesPerRequest: null });
 export const epochQueue = new Queue("epochs", { connection });
 export const tradingQueue = new Queue("trading", { connection });
 export const verificationQueue = new Queue("verification", { connection });
+export const autoRedeemQueue = new Queue("auto-redeem", { connection });
 
 const DEPOSIT_VERIFY_DELAY_MS = 15_000;
 const DEPOSIT_VERIFY_MAX_ATTEMPTS = 20; // ~5 min of retries
@@ -85,9 +87,15 @@ export function startEpochWorker() {
           logger.info(`Epoch ${epoch.number} → live`);
           await epochService.goLive(epochId);
 
+          // Remove the go_live scheduler now that it's fired
+          await epochQueue.removeJobScheduler(`go_live:${epochId}`);
+
           const pots = await potService.list({ epochId });
+
+          // Mark all pots as trading
           for (const pot of pots) {
-            await potService.setStatus(pot.id, "live");
+            pot.status = "trading";
+            await AppDataSource.getRepository(Pot).save(pot);
           }
 
           // Schedule AI agent cycles for each pot while the epoch is live
@@ -100,8 +108,16 @@ export function startEpochWorker() {
 
           // Schedule settling close (with buffer) and final settlement
           const settleAt = new Date(epoch.endsAt.getTime() - env.SETTLEMENT_BUFFER_MIN * 60 * 1000);
-          await epochQueue.add("go_settling", { epochId }, { delay: delayToMs(settleAt) });
-          await epochQueue.add("settle", { epochId }, { delay: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) });
+          await epochQueue.upsertJobScheduler(
+            `go_settling:${epochId}`,
+            { every: delayToMs(settleAt) || 86_400_000 },
+            { data: { epochId, action: "go_settling" } },
+          );
+          await epochQueue.upsertJobScheduler(
+            `settle:${epochId}`,
+            { every: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) || 86_400_000 },
+            { data: { epochId, action: "settle" } },
+          );
 
           // Roll over: ensure the NEXT epoch exists as "upcoming" so traders can
           // open pots and followers can fund during this epoch's live window.
@@ -126,9 +142,9 @@ export function startEpochWorker() {
             await tradingQueue.removeRepeatableByKey(`ai-cycle:${pot.id}:${env.AI_CYCLE_INTERVAL_MS}`);
           }
 
-          for (const pot of pots) {
-            await potService.setStatus(pot.id, "settling");
-          }
+          // Remove the go_settling scheduler now that it's fired
+          await epochQueue.removeJobScheduler(`go_settling:${epochId}`);
+
           break;
         }
 
@@ -141,7 +157,11 @@ export function startEpochWorker() {
           const attemptCount = Number(attempt ?? 0);
           if (!finalized && attemptCount < SETTLE_MAX_RETRIES) {
             logger.info(`Epoch ${epoch.number}: awaiting market resolution (attempt ${attemptCount + 1})`);
-            await epochQueue.add("settle", { epochId, attempt: attemptCount + 1 }, { delay: SETTLE_RETRY_MS });
+            // Use a one-shot delayed job for retry, not a scheduler
+            await epochQueue.add(`settle-retry:${epochId}`, { epochId, action: "settle", attempt: attemptCount + 1 }, {
+              delay: SETTLE_RETRY_MS,
+              jobId: `settle-retry:${epochId}:${attemptCount + 1}`,
+            });
             return;
           }
 
@@ -153,7 +173,21 @@ export function startEpochWorker() {
           await settlementService.settleEpoch(epochId);
           await epochService.goSettled(epochId);
 
+          // Remove the settle scheduler now that it's done
+          await epochQueue.removeJobScheduler(`settle:${epochId}`);
+          await epochQueue.removeJobScheduler(`settle_retry:${epochId}`);
+
           // Roll over: ensure the next epoch exists and is scheduled
+          const next = await epochService.ensureNext();
+          if (next) {
+            await scheduleEpoch(epochService, next);
+          }
+          break;
+        }
+
+        case "ensure": {
+          // Self-healing rollover: guarantee an upcoming epoch always exists
+          // (runs every 60s via a repeatable job).
           const next = await epochService.ensureNext();
           if (next) {
             await scheduleEpoch(epochService, next);
@@ -203,27 +237,40 @@ export function startTradingWorker() {
 }
 
 /**
- * Schedule an epoch's lifecycle transitions. Idempotent by epoch state — jobs
- * are only scheduled for epochs not yet past their transition points.
+ * Schedule an epoch's lifecycle transitions. Uses jobId to deduplicate —
+ * calling multiple times for the same epoch won't create duplicate jobs.
  */
 async function scheduleEpoch(epochService: EpochService, epoch: any): Promise<void> {
-  const now = Date.now();
-
   if (epoch.status === "upcoming") {
-    await epochQueue.add("go_live", { epochId: epoch.id }, { delay: delayToMs(new Date(epoch.startsAt)) });
+    await epochQueue.upsertJobScheduler(
+      `go_live:${epoch.id}`,
+      { every: delayToMs(new Date(epoch.startsAt)) || 86_400_000 },
+      { data: { epochId: epoch.id, action: "go_live" } },
+    );
     logger.info(`Scheduled go_live for epoch ${epoch.number} at ${new Date(epoch.startsAt).toISOString()}`);
   }
 
   if (epoch.status === "live" || epoch.status === "upcoming") {
     const settleAt = new Date(epoch.endsAt.getTime() - env.SETTLEMENT_BUFFER_MIN * 60 * 1000);
-    await epochQueue.add("go_settling", { epochId: epoch.id }, { delay: delayToMs(settleAt) });
-    await epochQueue.add("settle", { epochId: epoch.id }, { delay: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) });
+    await epochQueue.upsertJobScheduler(
+      `go_settling:${epoch.id}`,
+      { every: delayToMs(settleAt) || 86_400_000 },
+      { data: { epochId: epoch.id, action: "go_settling" } },
+    );
+    await epochQueue.upsertJobScheduler(
+      `settle:${epoch.id}`,
+      { every: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) || 86_400_000 },
+      { data: { epochId: epoch.id, action: "settle" } },
+    );
     logger.info(`Scheduled go_settling + settle for epoch ${epoch.number}`);
   }
 
   if (epoch.status === "settling") {
-    // A settle retry loop may already be running; schedule one to start now if not.
-    await epochQueue.add("settle", { epochId: epoch.id }, { delay: SETTLE_RETRY_MS });
+    await epochQueue.upsertJobScheduler(
+      `settle_retry:${epoch.id}`,
+      { every: SETTLE_RETRY_MS },
+      { data: { epochId: epoch.id, action: "settle" } },
+    );
   }
 }
 
@@ -261,6 +308,33 @@ export function startVerificationWorker() {
   return worker;
 }
 
+// ── Auto-Redeem Worker ────────────────────────────────────────────────────────
+
+const AUTO_REDEEM_INTERVAL_MS = 60_000;
+
+export function startAutoRedeemWorker() {
+  const settlementService = new SettlementService(AppDataSource);
+
+  const worker = new Worker(
+    "auto-redeem",
+    async (job: Job) => {
+      if (job.name !== "check-and-redeem") return;
+
+      const potsRedeemed = await settlementService.redeemExpiredPositions();
+      if (potsRedeemed > 0) {
+        logger.info(`Auto-redeem cycle: redeemed positions in ${potsRedeemed} pot(s)`);
+      }
+    },
+    { connection, concurrency: 1 },
+  );
+
+  worker.on("failed", (job, err) => {
+    logger.error(err, `Auto-redeem job ${job?.id} failed`);
+  });
+
+  return worker;
+}
+
 /**
  * Bootstrap the epoch schedule on startup: create an upcoming epoch if needed
  * and (re)schedule transitions for any epoch that isn't yet settled.
@@ -281,5 +355,20 @@ export async function ensureEpochSchedule(): Promise<void> {
   for (const epoch of active) {
     await scheduleEpoch(epochService, epoch);
   }
+
+  // Register the recurring rollover-ensure job (idempotent by jobId).
+  await epochQueue.upsertJobScheduler(
+    "ensure-epoch-schedule",
+    { every: 60_000 },
+    { data: { action: "ensure" } },
+  );
+
+  // Register the recurring auto-redeem job (checks every 60s for finalized markets).
+  await autoRedeemQueue.add("check-and-redeem", {}, {
+    repeat: { every: AUTO_REDEEM_INTERVAL_MS },
+    jobId: "auto-redeem-positions",
+    removeOnComplete: true,
+  });
+
   logger.info(`Epoch schedule ensured (${active.length} active epoch(s))`);
 }

@@ -24,7 +24,7 @@ export class Order {
   @Column({ type: "varchar", length: 100 })
   marketId!: string;
 
-  @Column({ type: "varchar", length: 50 })
+  @Column({ type: "varchar", length: 100 })
   symbol!: string;
 
   @Column({ type: "varchar", length: 66, nullable: true })

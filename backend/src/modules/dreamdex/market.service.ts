@@ -6,6 +6,8 @@ export interface LiveMarketInfo {
   id: string;
   symbol: string;
   asset: string;
+  question: string;
+  strike: string;
   intervalSec: number;
   expiry: string;
   upSymbol: string;
@@ -23,7 +25,9 @@ export interface LiveMarketInfo {
 export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
   const exchange = getReadExchange();
   try {
+    console.log("Loading live binary markets from DreamDEX");
     const all = await exchange.loadMarkets(true);
+    console.log(`Loaded ${Object.keys(all).length} markets from DreamDEX`);
 
     const results: LiveMarketInfo[] = [];
     for (const m of Object.values(all)) {
@@ -33,7 +37,9 @@ export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
       const asset = m.symbol?.split("-")[0];
       if (asset !== "BTC" && asset !== "ETH") continue;
 
-      const onchain = await exchange.client.getMarketOnchain(info.marketId as `0x${string}`);
+      const onchain = await exchange.client.getMarketOnchain(
+        info.marketId as `0x${string}`,
+      );
 
       let status: LiveMarketInfo["status"] = "listed";
       if (onchain.status === 0) status = "listed";
@@ -41,6 +47,13 @@ export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
       else if (onchain.status === 2) status = "locked";
       else if (onchain.status === 4) status = "resolved";
       else if (onchain.status === 5) status = "voided";
+
+      // Skip resolved, voided, and expired markets
+      if (status === "resolved" || status === "voided") continue;
+
+      // Also skip markets past their expiry time
+      const expiryTs = Number(info.expiry ?? 0);
+      if (expiryTs > 0 && expiryTs * 1000 < Date.now()) continue;
 
       const upOutcome = m.outcomes?.[0];
       const downOutcome = m.outcomes?.[1];
@@ -50,6 +63,9 @@ export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
       let downPrice = 0.5;
       try {
         const book = await exchange.fetchOrderBook(m.symbol, 1);
+        console.log(
+          `Fetched order book for ${m.symbol}: ${book.bids.length} bids, ${book.asks.length} asks`,
+        );
         const bestBid = book.bids?.[0]?.[0];
         const bestAsk = book.asks?.[0]?.[0];
         if (bestBid != null && bestAsk != null) {
@@ -65,13 +81,18 @@ export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
         id: info.marketId,
         symbol: m.symbol ?? "",
         asset,
+        question: (info as any).question ?? "",
+        strike: String((info as any).strike ?? "0"),
         intervalSec: Number(info.intervalSec ?? 3600),
         expiry: String(info.expiry ?? ""),
         upSymbol: upOutcome?.symbol ?? "",
         downSymbol: downOutcome?.symbol ?? "",
         upPrice,
         downPrice,
-        volume: Number((info as unknown as { cumulativeQuoteVolume?: string }).cumulativeQuoteVolume ?? "0"),
+        volume: Number(
+          (info as unknown as { cumulativeQuoteVolume?: string })
+            .cumulativeQuoteVolume ?? "0",
+        ),
         status,
         poolAddress: onchain.pool ?? "",
       });
@@ -111,10 +132,21 @@ export async function fetchCandles(
   pool: string,
   intervalSec: number = 60,
   limit: number = 100,
-): Promise<Array<{ time: number; open: number; high: number; low: number; close: number; volume: number }>> {
+): Promise<
+  Array<{
+    time: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+  }>
+> {
   const exchange = getReadExchange();
   try {
-    const candles = await exchange.client.getCandles(pool, intervalSec, { limit });
+    const candles = await exchange.client.getCandles(pool, intervalSec, {
+      limit,
+    });
     return candles.map((c) => ({
       time: Number(c.bucketStart ?? 0),
       open: Number(c.openPrice ?? 0),

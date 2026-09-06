@@ -10,7 +10,7 @@ import { Footer } from "@/components/Footer";
 import { B3TR } from "@/components/Token";
 import { useMarkets, useMe, usePots, useEpochs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import type { ComponentType, ReactNode } from "react";
+import { useMemo, type ComponentType, type ReactNode } from "react";
 
 export const Route = createFileRoute("/portfolio")({
   head: () => ({
@@ -80,7 +80,7 @@ function PortfolioPage() {
           <Stat
             icon={ClipboardList}
             label="Open positions"
-            value={`${myPots.filter((p: any) => p.status === "live").length} active`}
+            value={`${myPots.filter((p: any) => activeEpoch?.status === "live").length} active`}
             hint="Pots currently trading"
           />
         </div>
@@ -115,9 +115,9 @@ function PortfolioPage() {
                   </div>
                   <span className={cn(
                     "rounded-md px-2 py-0.5 text-xs font-semibold",
-                    pot.status === "live" ? "bg-up/15 text-up" : pot.status === "funding" ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
+                    activeEpoch?.status === "live" ? "bg-up/15 text-up" : activeEpoch?.status === "upcoming" ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground",
                   )}>
-                    {pot.status}
+                    {activeEpoch?.status ?? "unknown"}
                   </span>
                 </Link>
               ))}

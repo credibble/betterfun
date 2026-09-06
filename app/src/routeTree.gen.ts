@@ -14,7 +14,6 @@ import { Route as StudioRouteImport } from "./routes/studio"
 import { Route as PrivacyRouteImport } from "./routes/privacy"
 import { Route as PortfolioRouteImport } from "./routes/portfolio"
 import { Route as LeaderboardRouteImport } from "./routes/leaderboard"
-import { Route as HotTopicsRouteImport } from "./routes/hot-topics"
 import { Route as EpochsRouteImport } from "./routes/epochs"
 import { Route as EarnRouteImport } from "./routes/earn"
 import { Route as BecomeATraderRouteImport } from "./routes/become-a-trader"
@@ -50,11 +49,6 @@ const PortfolioRoute = PortfolioRouteImport.update({
 const LeaderboardRoute = LeaderboardRouteImport.update({
   id: "/leaderboard",
   path: "/leaderboard",
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HotTopicsRoute = HotTopicsRouteImport.update({
-  id: "/hot-topics",
-  path: "/hot-topics",
   getParentRoute: () => rootRouteImport,
 } as any)
 const EpochsRoute = EpochsRouteImport.update({
@@ -118,7 +112,6 @@ export interface FileRoutesByFullPath {
   "/become-a-trader": typeof BecomeATraderRouteWithChildren
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
-  "/hot-topics": typeof HotTopicsRoute
   "/leaderboard": typeof LeaderboardRoute
   "/portfolio": typeof PortfolioRoute
   "/privacy": typeof PrivacyRoute
@@ -136,7 +129,6 @@ export interface FileRoutesByTo {
   "/": typeof IndexRoute
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
-  "/hot-topics": typeof HotTopicsRoute
   "/leaderboard": typeof LeaderboardRoute
   "/portfolio": typeof PortfolioRoute
   "/privacy": typeof PrivacyRoute
@@ -156,7 +148,6 @@ export interface FileRoutesById {
   "/become-a-trader": typeof BecomeATraderRouteWithChildren
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
-  "/hot-topics": typeof HotTopicsRoute
   "/leaderboard": typeof LeaderboardRoute
   "/portfolio": typeof PortfolioRoute
   "/privacy": typeof PrivacyRoute
@@ -177,7 +168,6 @@ export interface FileRouteTypes {
     | "/become-a-trader"
     | "/earn"
     | "/epochs"
-    | "/hot-topics"
     | "/leaderboard"
     | "/portfolio"
     | "/privacy"
@@ -195,7 +185,6 @@ export interface FileRouteTypes {
     | "/"
     | "/earn"
     | "/epochs"
-    | "/hot-topics"
     | "/leaderboard"
     | "/portfolio"
     | "/privacy"
@@ -214,7 +203,6 @@ export interface FileRouteTypes {
     | "/become-a-trader"
     | "/earn"
     | "/epochs"
-    | "/hot-topics"
     | "/leaderboard"
     | "/portfolio"
     | "/privacy"
@@ -234,7 +222,6 @@ export interface RootRouteChildren {
   BecomeATraderRoute: typeof BecomeATraderRouteWithChildren
   EarnRoute: typeof EarnRoute
   EpochsRoute: typeof EpochsRoute
-  HotTopicsRoute: typeof HotTopicsRoute
   LeaderboardRoute: typeof LeaderboardRoute
   PortfolioRoute: typeof PortfolioRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -282,13 +269,6 @@ declare module "@tanstack/react-router" {
       path: "/leaderboard"
       fullPath: "/leaderboard"
       preLoaderRoute: typeof LeaderboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    "/hot-topics": {
-      id: "/hot-topics"
-      path: "/hot-topics"
-      fullPath: "/hot-topics"
-      preLoaderRoute: typeof HotTopicsRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/epochs": {
@@ -390,7 +370,6 @@ const rootRouteChildren: RootRouteChildren = {
   BecomeATraderRoute: BecomeATraderRouteWithChildren,
   EarnRoute: EarnRoute,
   EpochsRoute: EpochsRoute,
-  HotTopicsRoute: HotTopicsRoute,
   LeaderboardRoute: LeaderboardRoute,
   PortfolioRoute: PortfolioRoute,
   PrivacyRoute: PrivacyRoute,

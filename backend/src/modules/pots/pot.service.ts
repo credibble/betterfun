@@ -57,7 +57,6 @@ export class PotService {
       traderId: input.traderId,
       epochId: input.epochId,
       strategy: input.strategy,
-      status: "funding",
       cash: 0,
       nav: 0,
       deployed: 0,
@@ -177,7 +176,8 @@ export class PotService {
   }): Promise<PotShare> {
     const pot = await this.potRepo.findOne({ where: { id: input.potId } });
     if (!pot) throw new Error("Pot not found");
-    if (pot.status !== "funding") throw new Error("Pot is not accepting deposits");
+    const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
+    if (!epoch || epoch.status !== "upcoming") throw new Error("Pot is not accepting deposits");
 
     // Idempotency: a txHash that was already confirmed must not double-credit.
     const existing = await this.depositRepo.findOne({ where: { txHash: input.txHash, potId: input.potId } });
@@ -225,7 +225,6 @@ export class PotService {
     await this.potRepo.save(pot);
 
     // Update epoch TVL
-    const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
     if (epoch) {
       epoch.tvl = Number(epoch.tvl) + input.amountUsd;
       await this.epochRepo.save(epoch);
@@ -257,11 +256,6 @@ export class PotService {
   }): Promise<Withdrawal> {
     const pot = await this.potRepo.findOne({ where: { id: input.potId } });
     if (!pot) throw new Error("Pot not found");
-
-    // Only while the pot is funding (epoch still upcoming / pre-lock)
-    if (pot.status !== "funding") {
-      throw new Error("Can only withdraw while the pot is in funding");
-    }
 
     const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
     if (!epoch || epoch.status !== "upcoming") {
@@ -334,16 +328,6 @@ export class PotService {
    */
   async getShares(potId: string): Promise<PotShare[]> {
     return this.shareRepo.find({ where: { potId } });
-  }
-
-  /**
-   * Transition pot status.
-   */
-  async setStatus(potId: string, status: Pot["status"]): Promise<Pot | null> {
-    const pot = await this.potRepo.findOne({ where: { id: potId } });
-    if (!pot) return null;
-    pot.status = status;
-    return this.potRepo.save(pot);
   }
 
   /**

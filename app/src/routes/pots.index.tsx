@@ -4,7 +4,7 @@ import { Layers } from "lucide-react";
 import { PageShell } from "@/components/PageShell";
 import { PotCard } from "@/components/traders/PotCard";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
-import { usePots, useEpochs, useActiveEpoch } from "@/lib/queries";
+import { usePots, useEpochs, useActiveEpoch, useTraders } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/pots/")({
@@ -25,8 +25,11 @@ function PotsPage() {
   const { data: epochsData } = useEpochs();
   const { data: activeEpoch } = useActiveEpoch();
   const { data: potsData } = usePots();
+  const { data: tradersData } = useTraders();
   const epochs = Array.isArray(epochsData) ? epochsData : [];
   const allPots = Array.isArray(potsData) ? potsData : [];
+  const traders = Array.isArray(tradersData) ? tradersData : [];
+  const traderMeta = new Map(traders.map((t) => [t.id, { name: t.name, handle: t.handle }]));
 
   const [query, setQuery] = useState("");
   const [selectedEpoch, setSelectedEpoch] = useState<string>("all");
@@ -111,7 +114,14 @@ function PotsPage() {
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((p: any) => (
-            <PotCard key={p.id} pot={p} />
+            <PotCard
+              key={p.id}
+              pot={{
+                ...p,
+                traderName: traderMeta.get(p.traderId)?.name,
+                handle: traderMeta.get(p.traderId)?.handle,
+              }}
+            />
           ))}
         </div>
       )}

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import { PotCard } from "@/components/traders/PotCard";
-import { usePots, useTraders } from "@/lib/queries";
+import { usePots, useTraders, useEpochs } from "@/lib/queries";
 
 const filters = ["All", "Funding", "Live", "Settled"] as const;
 
@@ -11,20 +11,27 @@ export function AllPots() {
 
   const { data: pots = [] } = usePots();
   const { data: traders = [] } = useTraders();
+  const { data: epochs = [] } = useEpochs();
+
+  const epochById = useMemo(() => {
+    const m = new Map<string, { status: string }>();
+    (Array.isArray(epochs) ? epochs : []).forEach((e) => m.set(e.id, { status: e.status }));
+    return m;
+  }, [epochs]);
 
   const traderById = useMemo(() => {
-    const m = new Map<string, { name: string; isLive?: boolean }>();
-    (Array.isArray(traders) ? traders : []).forEach((t) => m.set(t.id, { name: t.name, isLive: t.isLive }));
+    const m = new Map<string, { name: string; handle?: string; isLive?: boolean }>();
+    (Array.isArray(traders) ? traders : []).forEach((t) => m.set(t.id, { name: t.name, handle: t.handle, isLive: t.isLive }));
     return m;
   }, [traders]);
 
   const list = useMemo(() => {
     let items = Array.isArray(pots) ? pots : [];
-    if (filter === "Funding") items = items.filter((p) => p.status === "funding");
-    else if (filter === "Live") items = items.filter((p) => p.status === "live" || p.status === "settling");
-    else if (filter === "Settled") items = items.filter((p) => p.status === "settled");
+    if (filter === "Funding") items = items.filter((p) => epochById.get(p.epochId)?.status === "upcoming");
+    else if (filter === "Live") items = items.filter((p) => epochById.get(p.epochId)?.status === "live" || epochById.get(p.epochId)?.status === "settling");
+    else if (filter === "Settled") items = items.filter((p) => epochById.get(p.epochId)?.status === "settled");
     return [...items].sort((a, b) => b.nav - a.nav);
-  }, [pots, filter]);
+  }, [pots, filter, epochById]);
 
   const shown = list.slice(0, limit);
 
@@ -68,9 +75,9 @@ export function AllPots() {
                 traderId: pot.traderId,
                 epochId: pot.epochId,
                 strategy: pot.strategy,
-                status: pot.status,
                 nav: pot.nav,
                 traderName: traderById.get(pot.traderId)?.name,
+                handle: traderById.get(pot.traderId)?.handle,
               }}
             />
           ))}

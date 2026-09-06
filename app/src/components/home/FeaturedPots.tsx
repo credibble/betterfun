@@ -25,9 +25,11 @@ export function FeaturedPots() {
   const traderList = Array.isArray(traders) ? traders : [];
 
   const traderById = new Map(traderList.map((t) => [t.id, t]));
-  const live = potList.find((p) => p.status === "live") ?? potList.find((p) => p.status === "funding");
+  const epochList = Array.isArray(epoch) ? epoch : [];
+  const epochById = new Map(epochList.map((e) => [e.id, e]));
+  const live = potList.find((p) => epochById.get(p.epochId)?.status === "live") ?? potList.find((p) => epochById.get(p.epochId)?.status === "upcoming");
   const featured = live ?? potList[0];
-  const activeEpoch = Array.isArray(epoch) ? epoch.find((e) => e.status === "live") ?? epoch[0] : undefined;
+  const activeEpoch = epochList.find((e) => e.status === "live") ?? epochList[0];
 
   if (!featured) {
     return (
@@ -49,9 +51,10 @@ export function FeaturedPots() {
   }
 
   const trader = traderById.get(featured.traderId);
-  const name = trader?.name ?? featured.traderId;
+  const name = trader?.name ?? "Trader";
+  const slug = trader?.handle ?? featured.id;
   const hue = seedHue(featured.traderId || featured.id);
-  const isLive = featured.status === "live";
+  const isLive = epochById.get(featured.epochId)?.status === "live";
 
   return (
     <section className="min-w-0">
@@ -59,7 +62,7 @@ export function FeaturedPots() {
         <div className="grid grid-cols-1 gap-4 p-5 sm:p-6 lg:grid-cols-[1fr_1.1fr]">
           <div className="flex min-w-0 flex-col">
             <div className="flex items-center gap-3">
-              <Link to="/pots/$id" params={{ id: featured.id }} className="shrink-0">
+              <Link to="/pots/$id" params={{ id: slug }} className="shrink-0">
                 <TraderAvatar name={name} hue={hue} avatarUrl={undefined} size={48} live={isLive} />
               </Link>
               <div className="min-w-0">
@@ -68,7 +71,7 @@ export function FeaturedPots() {
                 </div>
                 <Link
                   to="/pots/$id"
-                  params={{ id: featured.id }}
+                  params={{ id: slug }}
                   className="truncate text-lg font-bold tracking-tight hover:text-primary"
                 >
                   {name}
@@ -105,7 +108,7 @@ export function FeaturedPots() {
             <div className="flex flex-wrap gap-2">
               <Link
                 to="/pots/$id"
-                params={{ id: featured.id }}
+                params={{ id: slug }}
                 className="inline-flex items-center gap-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
               >
                 View pot <ArrowRight className="h-4 w-4" />

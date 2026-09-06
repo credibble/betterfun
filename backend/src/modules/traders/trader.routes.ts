@@ -76,6 +76,30 @@ export function buildTraderRoutes(dataSource: DataSource) {
     }
   });
 
+  // PATCH /traders/me/live — set the caller's live-stream status
+  router.patch("/me/live", requireAuth, requireTrader, async (req: AuthenticatedRequest, res) => {
+    try {
+      const isLive = req.body?.isLive;
+      if (typeof isLive !== "boolean") {
+        res.status(400).json({ error: "isLive boolean required" });
+        return;
+      }
+
+      const trader = await repo.findOne({ where: { userId: req.claims!.sub } });
+      if (!trader) {
+        res.status(404).json({ error: "No trader profile yet" });
+        return;
+      }
+
+      trader.isLive = isLive;
+      const saved = await repo.save(trader);
+      res.json(serializeTrader(saved));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
   // POST /traders — create a trader profile (re-issues JWT with trader role)
   router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
