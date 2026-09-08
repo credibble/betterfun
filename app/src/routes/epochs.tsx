@@ -1,8 +1,7 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Users, PlayCircle } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { useEpochs, useActiveEpoch, usePots, useDemoSeed, useDemoFastForward } from "@/lib/queries";
 import { toast } from "sonner";
@@ -67,9 +66,9 @@ function EpochsPage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -186,7 +185,6 @@ function EpochsPage() {
           </div>
         )}
       </main>
-      <Footer />
     </div>
   );
 }

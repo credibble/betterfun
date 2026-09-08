@@ -11,6 +11,13 @@ interface HubClient extends WebSocket {
 
 const clients = new Set<HubClient>();
 
+type BroadcastListener = (channel: string, payload: unknown) => void;
+const listeners = new Set<BroadcastListener>();
+
+export function onBroadcast(listener: BroadcastListener): void {
+  listeners.add(listener);
+}
+
 // A channel is a topic string, e.g. "pot:{potId}", "account:{address}",
 // "markets", "chat:{roomId}", "notifications:{userId}".
 export function broadcast(channel: string, payload: unknown): void {
@@ -19,6 +26,9 @@ export function broadcast(channel: string, payload: unknown): void {
     if (client.readyState === WebSocket.OPEN && (client._channels.has(channel) || client._channels.has("*"))) {
       client.send(json);
     }
+  }
+  for (const listener of listeners) {
+    listener(channel, payload);
   }
 }
 

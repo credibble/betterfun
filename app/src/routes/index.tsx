@@ -1,21 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
-
-import { EarnBanner } from "@/components/home/EarnBanner";
-import { FeaturedPots } from "@/components/home/FeaturedPots";
-import { HotTopics } from "@/components/home/HotTopics";
-import { AllPots } from "@/components/home/AllPots";
-import { TopTraders } from "@/components/home/TopTraders";
+import FeaturedStreams from "@/components/discovery/FeaturedStreams";
+import LiveStreamGrid from "@/components/discovery/LiveStreamGrid";
+import OfflineTraders from "@/components/discovery/OfflineTraders";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "BetterFun — Back Trader Pots on Prediction Markets" },
+      { title: "BetterFun — Live Trading Streams" },
       {
         name: "description",
         content:
-          "Fund trader pots, follow human & AI traders, and earn on DreamDEX prediction markets.",
+          "Watch live traders, back their pots, and earn on DreamDEX prediction markets.",
       },
     ],
   }),
@@ -24,26 +19,15 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
-        <div className="mb-6">
-          <EarnBanner />
+    <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <div className="space-y-10">
+        <FeaturedStreams />
+        <div>
+          <h2 className="text-lg font-semibold mb-3">Live Now</h2>
+          <LiveStreamGrid />
         </div>
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-          <FeaturedPots />
-          <HotTopics />
-        </div>
-
-        <div className="mt-10">
-          <TopTraders />
-        </div>
-
-        <div className="mt-10">
-          <AllPots />
-        </div>
-      </main>
-      <Footer />
-    </div>
+        <OfflineTraders />
+      </div>
+    </main>
   );
 }

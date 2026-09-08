@@ -1,11 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowRight,
   LayoutDashboard,
   LineChart,
-  Maximize2,
-  Minimize2,
   Plus,
   Radio,
   Search,
@@ -14,11 +11,12 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { formatUnits } from "viem";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import StreamLayout from "@/layouts/StreamLayout";
+import LiveSidebar from "@/components/sidebar/LiveSidebar";
+import StreamPlayer from "@/components/stream/StreamPlayer";
+import StreamChat from "@/components/chat/StreamChat";
+import StakePanel from "@/components/staking/StakePanel";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
-import { LiveChat } from "@/components/traders/LiveChat";
-import { LiveVideoPlayer } from "@/components/traders/LiveVideoPlayer";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { MarketCard } from "@/components/prediction/MarketCard";
 import { TradePanel } from "@/components/prediction/TradePanel";
@@ -95,21 +93,18 @@ function StudioPage() {
     [allPots, trader],
   );
 
-  // A trader runs one pot per epoch — the "live pot" is their pot in the live epoch.
   const epochById = useMemo(() => new Map(epochs.map((e) => [e.id, e])), [epochs]);
   const livePot = useMemo(() => {
     if (!trader) return null;
     return myPots.find((p) => epochById.get(p.epochId)?.status === "live") ?? null;
   }, [myPots, epochById, trader]);
 
-  // Subscribe to live pot updates via WS hub
   const potChannels = livePot ? [`pot:${livePot.id}`] : [];
   useWsHub(potChannels);
 
-  // Sync the local "live" flag with the persisted profile flag.
   useEffect(() => {
     if (myTrader) setLive(!!myTrader.isLive);
-  }, [myTrader?.isLive]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [myTrader?.isLive]);
 
   const room = trader?.handle
     ? `stream-${trader.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`
@@ -127,45 +122,65 @@ function StudioPage() {
 
   if (traderLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <div className="mx-auto flex flex-1 items-center justify-center">
-          <p className="text-sm text-muted-foreground">Loading studio…</p>
-        </div>
-        <Footer />
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Loading studio...</p>
       </div>
     );
   }
 
   if (!trader) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <main className="mx-auto flex min-h-[60vh] w-full max-w-[1200px] flex-1 items-center justify-center px-4 py-6">
-          <div className="max-w-md text-center">
-            <h1 className="text-2xl font-bold">No trader profile found</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Create a trader profile to access the studio.
-            </p>
-            <Link
-              to="/become-a-trader/settings"
-              className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-            >
-              Create profile
-            </Link>
-          </div>
-        </main>
+      <div className="flex h-screen items-center justify-center bg-background text-foreground">
+        <div className="max-w-md text-center">
+          <h1 className="text-2xl font-bold">No trader profile found</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Create a trader profile to access the studio.
+          </p>
+          <Link
+            to="/become-a-trader/settings"
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Create profile
+          </Link>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <StreamLayout
+      sidebar={<LiveSidebar />}
+      rightRail={
+        livePot && section === "trade" ? (
+          <div className="p-3 space-y-3">
+            <StreamChat
+              traderId={trader.id}
+              potId={livePot.id}
+              traderName={trader.name}
+              className="h-[400px]"
+            />
+            <StakePanel
+              potId={livePot.id}
+              nav={livePot.nav ? Number(livePot.nav) : 0}
+              lpPrice={livePot.lpPrice ? Number(livePot.lpPrice) : 1}
+              yourStake={0}
+              totalStakers={0}
+            />
+          </div>
+        ) : undefined
+      }
+    >
+      <div className="flex flex-col h-full bg-background text-foreground">
+        {/* Header bar */}
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b px-4 py-4">
           <div className="flex items-start gap-3">
-            <TraderAvatar name={trader.name} hue={seedHue(trader.id)} avatarUrl={trader.avatarUrl} size={52} live={live} />
+            <TraderAvatar
+              name={trader.name}
+              hue={seedHue(trader.id)}
+              avatarUrl={trader.avatarUrl}
+              size={52}
+              live={live}
+            />
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Trader Studio
@@ -203,16 +218,17 @@ function StudioPage() {
           </div>
         </div>
 
-        <nav className="mt-6 flex gap-1 overflow-x-auto rounded-lg border border-border bg-secondary/30 p-1">
+        {/* Section tabs */}
+        <nav className="flex gap-1 overflow-x-auto border-b px-4 pt-2">
           {SECTIONS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
               onClick={() => setSection(id)}
               className={cn(
-                "inline-flex shrink-0 items-center gap-2 rounded-md px-3 py-2.5 text-sm font-semibold transition-colors",
+                "inline-flex shrink-0 items-center gap-2 rounded-t-md px-3 py-2.5 text-sm font-semibold transition-colors",
                 section === id
-                  ? "bg-card text-foreground shadow-sm"
+                  ? "bg-card text-foreground border-b-2 border-primary"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -222,7 +238,8 @@ function StudioPage() {
           ))}
         </nav>
 
-        <div className="mt-6">
+        {/* Section content */}
+        <div className="flex-1 overflow-y-auto p-4">
           {section === "overview" && (
             <OverviewSection
               trader={trader}
@@ -247,15 +264,15 @@ function StudioPage() {
           )}
           {section === "followers" && <FollowersSection trader={trader} />}
         </div>
-      </main>
-      <StreamSetupDialog
-        open={setupOpen}
-        onOpenChange={setSetupOpen}
-        onConfirm={() => toggleLive(true)}
-        traderHandle={trader.handle}
-      />
-      <Footer />
-    </div>
+
+        <StreamSetupDialog
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+          onConfirm={() => toggleLive(true)}
+          traderHandle={trader.handle}
+        />
+      </div>
+    </StreamLayout>
   );
 }
 
@@ -274,14 +291,16 @@ function OverviewSection({
 }) {
   const [creating, setCreating] = useState(false);
   const potTvl = pots.reduce((s: number, p: any) => s + Number(p.nav), 0);
+  const totalStakers = pots.reduce((s: number, p: any) => s + (p.totalStakers ?? 0), 0);
+  const lpPrice = pots.length > 0 ? pots.reduce((s: number, p: any) => s + Number(p.lpPrice ?? 1), 0) / pots.length : 1;
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Followers" value={fmtFollowers(trader.followers ?? 0)} hint="People following you" />
-        <StatCard label="Pot capital" value={formatUsd(potTvl)} hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`} />
-        <StatCard label="Stream" value={live ? "Live now" : "Offline"} hint={live ? "You're on air" : "Ready when you are"} accent={live} />
-        <StatCard label="30d PnL" value={`${(trader.pnl30 ?? 0) >= 0 ? "+" : ""}${(trader.pnl30 ?? 0).toFixed(1)}%`} hint="Verified track record" />
+        <StatCard label="NAV" value={formatUsd(potTvl)} hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`} />
+        <StatCard label="LP Price" value={`$${lpPrice.toFixed(4)}`} hint="Average across pots" />
+        <StatCard label="Total Stakers" value={fmtFollowers(totalStakers)} hint="People staking in your pots" />
+        <StatCard label="Your Stake" value={formatUsd(pots.reduce((s: number, p: any) => s + (p.yourStake ?? 0), 0))} hint="Your deposited capital" />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -419,7 +438,7 @@ function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => 
         <input
           value={focus}
           onChange={(e) => setFocus(e.target.value)}
-          placeholder="Crypto, Momentum, 1× (comma-separated)"
+          placeholder="Crypto, Momentum, 1x (comma-separated)"
           className="mt-1.5 w-full rounded-lg border border-border bg-secondary/40 px-3 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-primary/50"
         />
       </label>
@@ -429,7 +448,7 @@ function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => 
         disabled={createPot.isPending}
         className="w-full rounded-lg bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
       >
-        {createPot.isPending ? "Creating…" : "Open pot"}
+        {createPot.isPending ? "Creating..." : "Open pot"}
       </button>
     </form>
   );
@@ -466,7 +485,7 @@ function PotsList({ pots, epochs, handle, emptyHint }: { pots: any[]; epochs: an
                 params={{ id: slug }}
                 className="inline-flex items-center gap-1 text-xs font-semibold text-link hover:underline"
               >
-                View <ArrowRight className="h-3.5 w-3.5" />
+                View
               </Link>
             </div>
           </li>
@@ -497,14 +516,12 @@ function TradeSection({
   setStreamTitle: (v: string) => void;
   setSetupOpen: (v: boolean) => void;
 }) {
-  const [fullscreen, setFullscreen] = useState(false);
   const [marketId, setMarketId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   const trade = useTrade();
   const { data: markets = [] } = useRestMarkets();
 
-  // On-chain vault data for metrics
   const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
   const { data: vaultExposure } = useVaultExposure(pot?.vaultAddress as `0x${string}` | undefined);
   const { data: vaultPositions } = useVaultPositions(pot?.vaultAddress as `0x${string}` | undefined);
@@ -512,7 +529,6 @@ function TradeSection({
   const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
     ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)
     : 0;
-  // Idle balance = NAV - min(yes, no) — collateral available for new trades
   const vaultIdle = vaultNav && vaultPositions
     ? vaultNav - (vaultPositions[0] < vaultPositions[1] ? vaultPositions[0] : vaultPositions[1])
     : 0n;
@@ -638,7 +654,7 @@ function TradeSection({
         </div>
       </div>
 
-      {/* Main layout: Markets grid + Trade panel */}
+      {/* Stream player + Markets grid */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
         {/* Left: Markets grid */}
         <div className="space-y-4">
@@ -732,8 +748,14 @@ function TradeSection({
           )}
         </div>
 
-        {/* Right: Trade panel + Stream */}
+        {/* Right: Stream + Trade panel */}
         <div className="space-y-4">
+          <StreamPlayer
+            traderId={trader.id}
+            traderName={trader.name}
+            isLive={live}
+          />
+
           {selectedMarket ? (
             <TradePanel
               symbol={selectedMarket.symbol ?? ""}
@@ -750,26 +772,8 @@ function TradeSection({
               <p className="mt-1 text-xs text-muted-foreground/70">Click any market card on the left</p>
             </div>
           )}
-
-          {/* Stream */}
-          <div className={cn(fullscreen && "fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4")}>
-            <div className={cn("relative rounded-xl overflow-hidden", fullscreen ? "h-full w-full max-w-4xl" : "h-56")}>
-              <LiveVideoPlayer room={room} className={fullscreen ? "h-full w-full" : "h-56"} />
-              <button
-                type="button"
-                onClick={() => setFullscreen((v) => !v)}
-                className="absolute right-2 top-2 z-20 rounded-md bg-black/60 p-1.5 text-white hover:bg-black/80"
-                aria-label={fullscreen ? "Exit fullscreen" : "Fullscreen"}
-              >
-                {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
         </div>
       </div>
-
-      {/* Live chat */}
-      <LiveChat className="h-[420px]" />
     </div>
   );
 }

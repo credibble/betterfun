@@ -5,8 +5,7 @@ import {
   ClipboardList,
   Wallet,
 } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { B3TR } from "@/components/Token";
 import { useMarkets, useMe, usePots, useEpochs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -39,9 +38,9 @@ function PortfolioPage() {
   const totalNav = myPots.reduce((sum: number, p: any) => sum + (p.nav ?? 0), 0);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -138,7 +137,6 @@ function PortfolioPage() {
           />
         </section>
       </main>
-      <Footer />
     </div>
   );
 }

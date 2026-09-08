@@ -176,7 +176,30 @@ export function buildTraderRoutes(dataSource: DataSource) {
     }
   });
 
-  // GET /traders/:id — single trader (must come after /me and /)
+  // GET /traders/live — all live traders (must come before /:id)
+  router.get("/live", async (_req, res) => {
+    try {
+      const traders = await repo.find({ where: { isLive: true }, order: { reputation: "DESC" } });
+      res.json(traders.map(serializeTrader));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // GET /traders/top — top traders by reputation (must come before /:id)
+  router.get("/top", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 50);
+      const traders = await repo.find({ order: { reputation: "DESC" }, take: limit });
+      res.json(traders.map(serializeTrader));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // GET /traders/:id — single trader (must come after /me, /, /live, /top)
   router.get("/:id", async (req, res) => {
     const trader = await repo.findOne({ where: { id: req.params.id } });
     if (!trader) {

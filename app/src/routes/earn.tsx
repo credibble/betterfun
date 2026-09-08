@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, Lock, Users } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { PotCard } from "@/components/traders/PotCard";
 import { useEpochs, useActiveEpoch, usePots } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -39,9 +38,9 @@ function EarnPage() {
   const epoch = epochs.find((e) => e.id === stakeEpochId);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Earn</h1>
@@ -112,7 +111,6 @@ function EarnPage() {
           </p>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

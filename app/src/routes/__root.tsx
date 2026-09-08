@@ -4,11 +4,22 @@ import {
   createRootRoute,
   useRouter,
 } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useState, createContext, useContext } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import { SiweSession } from "@/components/auth/SiweSession";
 import { useWsHub } from "@/lib/use-ws-hub";
+import TopBar from "@/layouts/TopBar";
+
+type SidebarContextType = {
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+};
+
+export const SidebarContext = createContext<SidebarContextType>({
+  sidebarOpen: true,
+  setSidebarOpen: () => {},
+});
 
 function NotFoundComponent() {
   return (
@@ -87,12 +98,16 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   useWsHub(["epochs", "*"]);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <>
+    <SidebarContext.Provider value={{ sidebarOpen, setSidebarOpen }}>
       <SiweSession />
-      <Outlet />
+      <TopBar />
+      <div className="pt-14">
+        <Outlet />
+      </div>
       <Toaster position="top-center" richColors />
-    </>
+    </SidebarContext.Provider>
   );
 }

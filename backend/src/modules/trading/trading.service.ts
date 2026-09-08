@@ -214,6 +214,18 @@ export class TradingService {
             ts: dbTrade.ts.toISOString(),
           },
         });
+
+        broadcast(`chat:pot:${pot.id}`, {
+          type: "trade_signal",
+          trader: pot.strategy?.title ?? "Trader",
+          potId: pot.id,
+          side: input.side,
+          marketId: input.marketId,
+          marketTitle: input.marketId,
+          price: yesPrice,
+          size: filled,
+          ts: Date.now(),
+        });
       }
 
       logger.info(`Trade executed: ${input.side} ${filled} contracts of ${input.marketId} for pot ${input.potId}`);

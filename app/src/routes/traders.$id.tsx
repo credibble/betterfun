@@ -11,15 +11,15 @@ import {
   Bell,
   BellOff,
 } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { Sparkline } from "@/components/market/Sparkline";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { ReputationBadge } from "@/components/traders/ReputationBadge";
 import { StakePanel } from "@/components/traders/StakePanel";
 import { PotCard } from "@/components/traders/PotCard";
-import { LiveVideoPlayer } from "@/components/traders/LiveVideoPlayer";
-import { LiveChat } from "@/components/traders/LiveChat";
+import StreamPlayer from "@/components/stream/StreamPlayer";
+import StreamChat from "@/components/chat/StreamChat";
+import { useStreamViewers } from "@/hooks/use-stream-viewers";
 import { toast } from "sonner";
 import { B3TR, XP } from "@/components/Token";
 import {
@@ -77,6 +77,8 @@ function TraderProfile() {
   const isFollowing = followData?.following ?? false;
 
   const room = t?.handle ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}` : "";
+  const { data: viewerData } = useStreamViewers(room);
+  const isLive = t?.isLive ?? false;
 
   const onFollow = () => {
     if (isFollowing) {
@@ -99,27 +101,25 @@ function TraderProfile() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <div className="mx-auto flex flex-1 items-center justify-center">
+      <div className="min-h-screen bg-background">
+        <TopBar />
+        <div className="mx-auto flex flex-1 items-center justify-center pt-20">
           <p className="text-sm text-muted-foreground">Loading trader...</p>
         </div>
-        <Footer />
       </div>
     );
   }
 
   if (error || !t) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <div className="mx-auto flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
+      <div className="min-h-screen bg-background">
+        <TopBar />
+        <div className="mx-auto flex flex-1 flex-col items-center justify-center gap-3 px-4 pt-20 text-center">
           <h1 className="text-xl font-semibold">Trader not found</h1>
           <Link to="/traders" className="text-link hover:underline">
             Back to traders
           </Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -149,9 +149,9 @@ function TraderProfile() {
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <Link
           to="/traders"
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -161,35 +161,54 @@ function TraderProfile() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
           <div className="min-w-0 space-y-5">
-            {/* Live stream (embedded when live) */}
-            {t.isLive && (
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <LiveVideoPlayer room={room} className="h-[360px]" />
-                <div className="flex flex-wrap items-center gap-3 p-4">
-                  <TraderAvatar name={t.name} avatarUrl={t.avatarUrl} size={44} live />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-bold">{t.name}</span>
-                      <ReputationBadge score={t.reputation ?? 0} showScore={false} />
-                    </div>
-                    <div className="truncate text-sm text-muted-foreground">
-                      Live trading stream · {fmtFollowers(t.followers ?? 0)} followers
+            {/* Live stream hero — large embedded player when live */}
+            {isLive && (
+              <div className="space-y-3">
+                <div className="overflow-hidden rounded-xl border border-border bg-card">
+                  <StreamPlayer
+                    traderId={id}
+                    traderName={t.name ?? "Trader"}
+                    isLive={isLive}
+                    viewerCount={viewerData?.count ?? 0}
+                    className="h-[480px] lg:h-[540px]"
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <TraderAvatar name={t.name} avatarUrl={t.avatarUrl} size={40} live />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold">{t.name}</span>
+                        <ReputationBadge score={t.reputation ?? 0} showScore={false} />
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        Live trading stream · {fmtFollowers(t.followers ?? 0)} followers
+                      </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => {
-                      setLiked((v) => !v);
-                      setLikes((n) => n + (liked ? -1 : 1));
-                    }}
-                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                      liked
-                        ? "bg-primary/15 text-primary"
-                        : "bg-secondary/60 text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    <Heart className={`h-3.5 w-3.5 ${liked ? "fill-current" : ""}`} />
-                    <span className="num">{likes.toLocaleString()}</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setLiked((v) => !v);
+                        setLikes((n) => n + (liked ? -1 : 1));
+                      }}
+                      className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
+                        liked
+                          ? "bg-primary/15 text-primary"
+                          : "bg-secondary/60 text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      <Heart className={`h-3.5 w-3.5 ${liked ? "fill-current" : ""}`} />
+                      <span>{likes.toLocaleString()}</span>
+                    </button>
+                    <Link
+                      to="/live/$id"
+                      params={{ id }}
+                      className="flex items-center gap-1.5 rounded-lg bg-red-500 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-red-600"
+                    >
+                      <Radio className="h-4 w-4" /> Full stream
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}
@@ -253,10 +272,10 @@ function TraderProfile() {
                 >
                   {notify ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                 </button>
-                {t.isLive && (
+                {isLive && (
                   <Link
                     to="/live/$id"
-                    params={{ id: t.id }}
+                    params={{ id }}
                     className="ml-auto flex items-center gap-1.5 rounded-lg bg-down px-4 py-2 text-sm font-semibold text-down-foreground transition-all hover:brightness-110"
                   >
                     <Radio className="h-4 w-4" /> Watch full stream
@@ -324,7 +343,16 @@ function TraderProfile() {
           {/* Right rail */}
           <div className="space-y-4 lg:sticky lg:top-20 lg:self-start">
             {/* Live chat (when live) */}
-            {t.isLive && <LiveChat room={room} className="h-[440px]" />}
+            {isLive && (
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <StreamChat
+                  traderId={id}
+                  potId={pots[0]?.id}
+                  traderName={t.name ?? "Trader"}
+                  className="h-[440px]"
+                />
+              </div>
+            )}
             <StakePanel trader={t} />
             <div className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-sm font-semibold">
@@ -344,7 +372,6 @@ function TraderProfile() {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

@@ -2,8 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check, Zap } from "lucide-react";
 import { useState, useMemo } from "react";
 import { formatUnits } from "viem";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { StakePanel } from "@/components/traders/StakePanel";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
@@ -93,27 +92,25 @@ function PotDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <div className="mx-auto flex flex-1 items-center justify-center">
+      <div className="min-h-screen bg-background">
+        <TopBar />
+        <div className="mx-auto flex flex-1 items-center justify-center pt-20">
           <p className="text-sm text-muted-foreground">Loading pot...</p>
         </div>
-        <Footer />
       </div>
     );
   }
 
   if (!pot) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <Navbar />
-        <div className="mx-auto flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
+      <div className="min-h-screen bg-background">
+        <TopBar />
+        <div className="mx-auto flex flex-1 flex-col items-center justify-center gap-3 px-4 pt-20 text-center">
           <h1 className="text-xl font-semibold">Pot not found</h1>
           <Link to="/pots" className="text-link hover:underline">
             Back to pots
           </Link>
         </div>
-        <Footer />
       </div>
     );
   }
@@ -128,9 +125,9 @@ function PotDetailPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
-      <main className="mx-auto w-full min-h-[80vh] max-w-[1200px] flex-1 px-4 py-6">
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <Link
           to="/pots"
           className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
@@ -298,7 +295,6 @@ function PotDetailPage() {
           </div>
         </div>
       </main>
-      <Footer />
     </div>
   );
 }

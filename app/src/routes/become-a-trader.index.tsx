@@ -12,8 +12,7 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 import { B3TR } from "@/components/Token";
 
 export const Route = createFileRoute("/become-a-trader/")({
@@ -96,8 +95,8 @@ function StatBox({ value, label }: { value: React.ReactNode; label: string }) {
 
 function BecomeTraderPage() {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
+    <div className="min-h-screen bg-background">
+      <TopBar />
       <main className="min-h-[80vh] flex-1">
         <section className="border-b border-border bg-gradient-to-b from-primary/[0.06] to-transparent">
           <div className="mx-auto w-full max-w-[1000px] px-4 py-14 text-center sm:py-20">
@@ -199,7 +198,6 @@ function BecomeTraderPage() {
           </div>
         </section>
       </main>
-      <Footer />
     </div>
   );
 }

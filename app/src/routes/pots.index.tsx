@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { Layers } from "lucide-react";
-import { PageShell } from "@/components/PageShell";
+import TopBar from "@/layouts/TopBar";
 import { PotCard } from "@/components/traders/PotCard";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { usePots, useEpochs, useActiveEpoch, useTraders } from "@/lib/queries";
@@ -49,7 +49,9 @@ function PotsPage() {
   }, [allPots, selectedEpoch, query]);
 
   return (
-    <PageShell>
+    <div className="min-h-screen bg-background">
+      <TopBar />
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -125,6 +127,7 @@ function PotsPage() {
           ))}
         </div>
       )}
-    </PageShell>
+      </main>
+    </div>
   );
 }

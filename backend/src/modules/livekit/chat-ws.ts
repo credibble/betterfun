@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server } from "http";
+import { onBroadcast } from "../realtime/ws-hub.js";
 
 interface ChatWsClient extends WebSocket {
   _room?: string;
@@ -10,6 +11,19 @@ export function setupChatWs(server: Server) {
   // Use noServer mode so we can share the HTTP server with the WS hub.
   // The main startup code calls server.on('upgrade') to route by path.
   const wss = new WebSocketServer({ noServer: true, perMessageDeflate: false });
+
+  // Bridge hub broadcast events (e.g. trade_signal) into matching chat rooms.
+  onBroadcast((channel, payload) => {
+    if (!channel.startsWith("chat:")) return;
+    const room = channel.slice("chat:".length);
+    const json = JSON.stringify(payload);
+    wss.clients.forEach((client) => {
+      const c = client as ChatWsClient;
+      if (c._room === room && c.readyState === WebSocket.OPEN) {
+        c.send(json);
+      }
+    });
+  });
 
   interface AliveWs extends WebSocket {
     isAlive?: boolean;

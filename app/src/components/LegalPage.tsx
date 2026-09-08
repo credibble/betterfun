@@ -1,6 +1,5 @@
 import { type ReactNode } from "react";
-import { Navbar } from "@/components/Navbar";
-import { Footer } from "@/components/Footer";
+import TopBar from "@/layouts/TopBar";
 
 export type LegalSection = {
   heading: string;
@@ -19,8 +18,8 @@ export function LegalPage({
   sections: LegalSection[];
 }) {
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <Navbar />
+    <div className="min-h-screen bg-background">
+      <TopBar />
       <main className="mx-auto w-full min-h-[80vh] max-w-[820px] flex-1 px-4 py-10 sm:py-14">
         <header className="border-b border-border pb-6">
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
@@ -60,7 +59,6 @@ export function LegalPage({
           ))}
         </div>
       </main>
-      <Footer />
     </div>
   );
 }
