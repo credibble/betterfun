@@ -5,9 +5,9 @@ import { useAccount } from "wagmi";
 import { TrendingUp, Lock, Wallet } from "lucide-react";
 import { formatUnits } from "viem";
 import { ActionPairTabs } from "@/components/ActionPairTabs";
-import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
+import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch, useSyncVaultDeposit } from "@/lib/queries";
 import { useVaultDeposit, useVaultWithdraw, useVaultShares, useVaultNav, useVaultPrice, useVaultTotalSupply, formatNav, formatSharePrice } from "@/lib/vault-hooks";
-import { VAULT_ADDRESS, TUSDC_TOKEN } from "@/lib/chains";
+import { TUSDC_TOKEN } from "@/lib/chains";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 
 type Trader = { id: string; name: string };
@@ -59,15 +59,16 @@ export function StakePanel({
   const [amount, setAmount] = useState(0);
   const [mode, setMode] = useState<"stake" | "unstake" | "claim">("stake");
 
-  const { deposit, isPending: depositPending } = useVaultDeposit();
-  const { withdraw, isPending: withdrawPending } = useVaultWithdraw();
+  const { deposit, isPending: depositPending } = useVaultDeposit(pot?.vaultAddress);
+  const { withdraw, isPending: withdrawPending } = useVaultWithdraw(pot?.vaultAddress);
   const claimMutation = useClaimPayout();
+  const syncDepositMutation = useSyncVaultDeposit();
 
   // On-chain vault data
-  const { data: vaultNav } = useVaultNav();
-  const { data: vaultPrice } = useVaultPrice();
-  const { data: myVaultShares } = useVaultShares(address);
-  const { data: totalSupply } = useVaultTotalSupply();
+  const { data: vaultNav } = useVaultNav(pot?.vaultAddress);
+  const { data: vaultPrice } = useVaultPrice(pot?.vaultAddress);
+  const { data: myVaultShares } = useVaultShares(address, pot?.vaultAddress);
+  const { data: totalSupply } = useVaultTotalSupply(pot?.vaultAddress);
 
   const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
   const myVaultShareBalance = myVaultShares ? Number(formatUnits(myVaultShares, 18)) : 0;
@@ -75,7 +76,7 @@ export function StakePanel({
     ? Number(formatUnits(myVaultShares, 18)) * Number(formatUnits(vaultPrice, 18))
     : 0;
 
-  const hasVault = VAULT_ADDRESS !== "0x0000000000000000000000000000000000000000";
+  const hasVault = pot?.vaultAddress && pot.vaultAddress !== "0x0000000000000000000000000000000000000000";
 
   const onMint = async () => {
     toast.info("Use the tUSDC faucet to mint test tokens");
@@ -99,9 +100,21 @@ export function StakePanel({
       return;
     }
     try {
-      await deposit(amount);
+      const txHash = await deposit(amount);
       toast.success(`Deposited ${formatUsd(amount)} into the vault`);
       setAmount(0);
+
+      // Sync the on-chain deposit to the backend so settlement can compute claimableUsd
+      if (pot?.id && txHash) {
+        syncDepositMutation.mutate(
+          { potId: pot.id, txHash },
+          {
+            onError: (err: any) => {
+              console.error("Failed to sync vault deposit:", err);
+            },
+          },
+        );
+      }
     } catch (err: any) {
       toast.error(err?.message ?? "Deposit failed");
     }
@@ -217,7 +230,7 @@ export function StakePanel({
             <div className="mt-2 truncate text-muted-foreground">
               Vault{" "}
               <span className="font-semibold text-link">
-                {VAULT_ADDRESS.slice(0, 6)}…{VAULT_ADDRESS.slice(-4)}
+                {pot?.vaultAddress?.slice(0, 6)}…{pot?.vaultAddress?.slice(-4)}
               </span>
             </div>
           </div>

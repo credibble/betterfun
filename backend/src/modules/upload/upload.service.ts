@@ -57,13 +57,3 @@ export async function uploadImage(
 
   return result;
 }
-
-export async function deleteImage(publicId: string): Promise<void> {
-  ensureConfigured();
-  if (!configured) return;
-  try {
-    await cloudinary.uploader.destroy(publicId);
-  } catch (err) {
-    logger.error(err, `Failed to delete Cloudinary image: ${publicId}`);
-  }
-}

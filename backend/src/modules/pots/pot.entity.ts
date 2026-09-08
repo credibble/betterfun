@@ -61,6 +61,9 @@ export class Pot {
   @Column({ type: "int", default: 0 })
   signerIndex!: number;
 
+  @Column({ type: "varchar", length: 42, nullable: true })
+  vaultAddress!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

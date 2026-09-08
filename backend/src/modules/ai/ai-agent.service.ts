@@ -7,7 +7,8 @@ import { Pot } from "../pots/pot.entity.js";
 import { Epoch } from "../epochs/epoch.entity.js";
 import { loadLiveBinaryMarkets, fetchPrice, fetchOrderBook } from "../dreamdex/market.service.js";
 import { getReadExchange } from "../dreamdex/exchange.js";
-import { vaultTrade, readVaultNav } from "../vault/vault.service.js";
+import { vaultTrade, readVaultNav, vaultApprovePool } from "../vault/vault.service.js";
+import { derivePotKey } from "../dreamdex/keys.js";
 import { logger } from "../../lib/logger.js";
 
 export interface AiDecision {
@@ -65,18 +66,18 @@ export class AiAgentService {
       return null;
     }
 
-    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
-    const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
-    if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
-      logger.warn("VAULT_ADDRESS or POT_MASTER_SEED not set — skipping AI cycle");
-      return null;
-    }
-
     try {
       const pot = await this.potRepo.findOne({ where: { id: potId } });
       if (!pot) return null;
       const epoch = await this.epochRepo.findOne({ where: { id: pot.epochId } });
       if (!epoch || epoch.status !== "live") return null;
+
+      const vaultAddr = pot.vaultAddress as Hex | undefined;
+      const operatorKey = derivePotKey(pot.signerIndex) as Hex | undefined;
+      if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
+        logger.warn(`Pot ${potId} vault not deployed or derivePotKey failed — skipping AI cycle`);
+        return null;
+      }
 
       const caps = RISK_CAPS[pot.strategy?.risk ?? "balanced"];
 
@@ -201,10 +202,10 @@ Decide the single best trade (or hold). Output only valid JSON.`;
       const params = await exchange.client.getBinaryBookParams(onchain.pool);
       const decimals = onchain.decimals ?? 6;
 
-      // Map side to vault side enum: 0=BUY_YES, 1=BUY_NO, 2=SELL_YES, 3=SELL_NO
+      // Map side to vault side enum: 0=BUY_YES, 1=SELL_YES, 2=BUY_NO, 3=SELL_NO
       const isBuy = decision.side.startsWith("buy");
       const isYes = decision.side.endsWith("up");
-      const vaultSide: 0 | 1 | 2 | 3 = isBuy ? (isYes ? 0 : 1) : (isYes ? 2 : 3);
+      const vaultSide: 0 | 1 | 2 | 3 = isBuy ? (isYes ? 0 : 2) : (isYes ? 1 : 3);
 
       // Price in the SDK is always YES terms
       const yesPrice = isYes ? decision.maxPrice : 1 - decision.maxPrice;
@@ -223,6 +224,9 @@ Decide the single best trade (or hold). Output only valid JSON.`;
       const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
       const wantNs = nowNs + 300n * NS_PER_SEC;
       const expiryNs = wantNs < poolExpiryNs ? wantNs : poolExpiryNs;
+
+      // Approve pool if needed
+      await vaultApprovePool(vaultAddr, operatorKey, onchain.pool);
 
       const receipt = await vaultTrade(
         vaultAddr,

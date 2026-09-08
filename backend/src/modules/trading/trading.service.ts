@@ -7,7 +7,8 @@ import { Position } from "./position.entity.js";
 import { Order } from "./order.entity.js";
 import { Trade } from "./trade.entity.js";
 import { broadcast } from "../realtime/ws-hub.js";
-import { vaultTrade, syncPotFromVault } from "../vault/vault.service.js";
+import { vaultTrade, syncPotFromVault, vaultApprovePool } from "../vault/vault.service.js";
+import { derivePotKey } from "../dreamdex/keys.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
@@ -50,10 +51,10 @@ function qtyToRaw(humanQty: number, decimals: number, lotSize: bigint, minQuanti
 }
 
 const SIDE_MAP: Record<string, 0 | 1 | 2 | 3> = {
-  buy_up: 0,
-  buy_down: 1,
-  sell_up: 2,
-  sell_down: 3,
+  buy_up: 0,    // BUY_YES
+  sell_up: 1,   // SELL_YES
+  buy_down: 2,  // BUY_NO
+  sell_down: 3, // SELL_NO
 };
 
 const NO_SIDES = new Set(["buy_down", "sell_down"]);
@@ -93,10 +94,10 @@ export class TradingService {
       if (input.sizeUsd <= 0) throw new Error("sizeUsd must be positive");
       const isBuy = input.side.startsWith("buy");
 
-      const vaultAddr = process.env.VAULT_ADDRESS as Hex;
-      const operatorKey = env.POT_MASTER_SEED as Hex;
+      const vaultAddr = pot.vaultAddress as Hex | undefined;
+      const operatorKey = derivePotKey(pot.signerIndex) as Hex;
       if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000" || !operatorKey) {
-        throw new Error("VAULT_ADDRESS and POT_MASTER_SEED must be configured");
+        throw new Error("Pot vault not deployed or POT_MASTER_SEED not configured");
       }
 
       // Check vault idle balance on-chain for buys
@@ -145,6 +146,9 @@ export class TradingService {
       const nowNs = BigInt(Math.floor(Date.now() / 1000)) * NS_PER_SEC;
       const wantNs = nowNs + BigInt(input.expiresInSec ?? 300) * NS_PER_SEC;
       const expiryNs = wantNs < poolExpiryNs ? wantNs : poolExpiryNs;
+
+      // Approve pool if not already approved
+      await vaultApprovePool(vaultAddr, operatorKey, onchain.pool);
 
       const receipt = await vaultTrade(
         vaultAddr,

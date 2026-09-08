@@ -111,14 +111,4 @@ export async function listParticipants(room: string) {
   }
 }
 
-export async function removeParticipant(room: string, identity: string) {
-  if (!roomService) return;
-  try {
-    await roomService.removeParticipant(room, identity);
-  } catch (err) {
-    logger.error(err, `Failed to remove participant ${identity}`);
-  }
-}
-
 export { roomService };
-export { TwirpError };

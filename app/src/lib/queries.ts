@@ -332,6 +332,21 @@ export function useClaimPayout() {
   });
 }
 
+export function useSyncVaultDeposit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { potId: string; txHash: string }) =>
+      api<{ shares: number; investedUsd: number }>(`/pots/${input.potId}/sync-vault-deposit`, {
+        method: "POST",
+        body: JSON.stringify({ txHash: input.txHash }),
+      }),
+    onSuccess: (_data, input) => {
+      qc.invalidateQueries({ queryKey: ["pot-shares", input.potId] });
+      qc.invalidateQueries({ queryKey: ["pots", input.potId] });
+    },
+  });
+}
+
 export function useSettleEpoch() {
   const qc = useQueryClient();
   return useMutation({

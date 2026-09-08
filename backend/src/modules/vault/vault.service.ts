@@ -2,28 +2,41 @@ import { privateKeyToAccount } from "viem/accounts";
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
+  defineChain,
   http,
   parseAbi,
   type Hex,
 } from "viem";
-import { somnia } from "viem/chains";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 import { EVENT_VAULT_ABI, VAULT_FACTORY_ABI } from "./vault-abi.js";
+import { VAULT_FACTORY_BYTECODE } from "./vault-factory-bytecode.js";
 import { Pot } from "../pots/pot.entity.js";
 import { broadcast } from "../realtime/ws-hub.js";
 
-const publicClient = createPublicClient({
-  chain: somnia,
+const somniaShannon = defineChain({
+  id: 50312,
+  name: "Somnia Shannon Testnet",
+  nativeCurrency: { name: "STT", symbol: "STT", decimals: 18 },
+  rpcUrls: {
+    default: { http: [env.SOMNIA_RPC_URL] },
+  },
+});
+
+export const publicClient = createPublicClient({
+  chain: somniaShannon,
   transport: http(env.SOMNIA_RPC_URL),
 });
+
+export { EVENT_VAULT_ABI, VAULT_FACTORY_ABI } from "./vault-abi.js";
 
 function getOperatorClient(privateKey: Hex) {
   const account = privateKeyToAccount(privateKey);
   return createWalletClient({
-    chain: somnia,
-    transport: http(env.SOMNIA_RPC_URL),
+    chain: somniaShannon,
     account,
+    transport: http(env.SOMNIA_RPC_URL),
   });
 }
 
@@ -67,6 +80,30 @@ export async function readVaultTotalSupply(vault: Hex): Promise<bigint> {
     address: vault,
     abi: EVENT_VAULT_ABI,
     functionName: "totalSupply",
+  });
+}
+
+const OUTCOME_NFT_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "tokenId", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
+
+/** Read the vault's balance of a specific outcome token (ERC-6909). */
+export async function readOutcomeBalance(vault: Hex, tokenId: bigint): Promise<bigint> {
+  const outcomeNft = env.OUTCOME_NFT_ADDRESS as Hex;
+  return publicClient.readContract({
+    address: outcomeNft,
+    abi: OUTCOME_NFT_ABI,
+    functionName: "balanceOf",
+    args: [vault, tokenId],
   });
 }
 
@@ -190,11 +227,15 @@ export async function vaultRedeem(
 
 export async function factoryDeploy(
   factory: Hex,
-  privateKey: Hex,
   trader: Hex,
   exposureLimit: bigint,
 ) {
-  const client = getOperatorClient(privateKey);
+  if (!factory || factory === "0x0000000000000000000000000000000000000000") {
+    throw new Error(`Invalid factory address: ${factory} — check VAULT_FACTORY_ADDRESS in .env`);
+  }
+  const governanceKey = env.GOVERNANCE_PRIVATE_KEY as Hex;
+  if (!governanceKey) throw new Error("GOVERNANCE_PRIVATE_KEY not set");
+  const client = getOperatorClient(governanceKey);
   const hash = await client.writeContract({
     address: factory,
     abi: VAULT_FACTORY_ABI,
@@ -203,15 +244,100 @@ export async function factoryDeploy(
   } as const);
   logger.info(`factory deploy: ${hash} (trader=${trader})`);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
+
+  // Extract vault address from VaultDeployed event logs
+  let vaultAddr: Hex | null = null;
+  for (const log of receipt.logs) {
+    try {
+      const parsed = decodeEventLog({
+        abi: VAULT_FACTORY_ABI,
+        data: log.data,
+        topics: log.topics,
+      });
+      if (parsed.eventName === "VaultDeployed") {
+        const args = parsed.args as unknown as { vault: Hex };
+        vaultAddr = args.vault;
+        break;
+      }
+    } catch {}
+  }
+  if (!vaultAddr) throw new Error("VaultDeployed event not found in factory deploy receipt");
+
+  // deploy() already calls v.setGovernance(owner) inside the factory,
+  // so governance is already the EOA — no transfer needed.
+
+  return receipt;
+
   return receipt;
 }
 
+export async function deployFactory(): Promise<{ receipt: any; contractAddress: Hex }> {
+  const governanceKey = env.GOVERNANCE_PRIVATE_KEY as Hex;
+  if (!governanceKey) throw new Error("GOVERNANCE_PRIVATE_KEY not set");
+  const client = getOperatorClient(governanceKey);
+
+  const tusdc = env.TUSDC_TOKEN_ADDRESS as Hex;
+  const outcomeNft = env.OUTCOME_NFT_ADDRESS as Hex;
+  const settlement = env.SETTLEMENT_ADDRESS as Hex;
+
+  if (!tusdc || !outcomeNft || !settlement) {
+    throw new Error("TUSDC_TOKEN_ADDRESS, OUTCOME_NFT_ADDRESS, SETTLEMENT_ADDRESS must be set");
+  }
+
+  const governanceAddr = privateKeyToAccount(governanceKey).address;
+  const hash = await client.deployContract({
+    abi: VAULT_FACTORY_ABI,
+    bytecode: VAULT_FACTORY_BYTECODE as `0x${string}`,
+    args: [tusdc, outcomeNft, settlement, governanceAddr],
+  } as const);
+
+  logger.info(`factory deploy tx: ${hash}`);
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  logger.info(`New VaultFactory deployed at: ${receipt.contractAddress}`);
+  return { receipt, contractAddress: receipt.contractAddress as Hex };
+}
+
+export async function vaultApprovePool(
+  vault: Hex,
+  privateKey: Hex,
+  pool: Hex,
+) {
+  // Check if pool is already approved — skip the governance call if so.
+  try {
+    const alreadyApproved = await publicClient.readContract({
+      address: vault,
+      abi: EVENT_VAULT_ABI,
+      functionName: "approved",
+      args: [pool],
+    });
+    if (alreadyApproved) {
+      logger.info(`Pool ${pool} already approved on vault ${vault}`);
+      return;
+    }
+  } catch {
+    // If we can't read, try the approve call anyway
+  }
+
+  // approvePool is gated by onlyGov — use the governance key.
+  const governanceKey = (env.GOVERNANCE_PRIVATE_KEY ?? privateKey) as Hex;
+  const client = getOperatorClient(governanceKey);
+  const hash = await client.writeContract({
+    address: vault,
+    abi: EVENT_VAULT_ABI,
+    functionName: "approvePool",
+    args: [pool],
+  } as const);
+  logger.info(`vault approve pool: ${hash} (pool=${pool})`);
+  return publicClient.waitForTransactionReceipt({ hash });
+}
+
 export async function factoryVaultCount(factory: Hex): Promise<bigint> {
-  return publicClient.readContract({
+  const result = await publicClient.readContract({
     address: factory,
     abi: VAULT_FACTORY_ABI,
     functionName: "vaultCount",
   });
+  return BigInt(result as bigint);
 }
 
 /* ─── Vault → DB sync ─────────────────────────────────────────────── */

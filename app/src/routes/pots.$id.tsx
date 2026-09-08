@@ -76,9 +76,9 @@ function PotDetailPage() {
   const { data: me } = useMe();
 
   // On-chain vault data for metrics
-  const { data: vaultNav } = useVaultNav();
-  const { data: vaultPrice } = useVaultPrice();
-  const { data: vaultExposure } = useVaultExposure();
+  const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
+  const { data: vaultPrice } = useVaultPrice(pot?.vaultAddress as `0x${string}` | undefined);
+  const { data: vaultExposure } = useVaultExposure(pot?.vaultAddress as `0x${string}` | undefined);
 
   const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
   const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure

@@ -33,10 +33,12 @@ export async function ensureGas(to: string): Promise<void> {
     }
 
     const walletClient = createWalletClient({ account, chain: somniaShannon as any, transport: http() });
+    const nonce = await publicClient.getTransactionCount({ address: account.address });
     const hash = await walletClient.sendTransaction({
       to: to as `0x${string}`,
       value: parseEther(env.POT_GAS_FUND_AMT),
       chain: somniaShannon as any,
+      nonce,
     });
     logger.info(`Funded ${env.POT_GAS_FUND_AMT} STT gas to ${to} (${hash})`);
   } catch (err) {

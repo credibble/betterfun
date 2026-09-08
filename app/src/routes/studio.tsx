@@ -505,9 +505,9 @@ function TradeSection({
   const { data: markets = [] } = useRestMarkets();
 
   // On-chain vault data for metrics
-  const { data: vaultNav } = useVaultNav();
-  const { data: vaultExposure } = useVaultExposure();
-  const { data: vaultPositions } = useVaultPositions();
+  const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
+  const { data: vaultExposure } = useVaultExposure(pot?.vaultAddress as `0x${string}` | undefined);
+  const { data: vaultPositions } = useVaultPositions(pot?.vaultAddress as `0x${string}` | undefined);
   const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
   const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
     ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)

@@ -1,5 +1,5 @@
 import { type DataSource } from "typeorm";
-import { type Hex } from "viem";
+import { type Hex, decodeEventLog } from "viem";
 import { v4 as uuid } from "uuid";
 import { Pot } from "./pot.entity.js";
 import { PotShare } from "./pot-share.entity.js";
@@ -11,7 +11,8 @@ import { fundGas } from "../dreamdex/fund.js";
 import { transferTusdc } from "../dreamdex/transfer.js";
 import { verifyTusdcTransfer, isPendingResult } from "../dreamdex/verify.js";
 import { broadcast } from "../realtime/ws-hub.js";
-import { syncPotFromVault } from "../vault/vault.service.js";
+import { syncPotFromVault, factoryDeploy, vaultApprovePool, vaultDeposit, vaultWithdraw } from "../vault/vault.service.js";
+import { publicClient, VAULT_FACTORY_ABI } from "../vault/vault.service.js";
 import { env } from "../../config/env.js";
 import { logger } from "../../lib/logger.js";
 
@@ -66,6 +67,7 @@ export class PotService {
       sharesOutstanding: 0,
       signerAddress,
       signerIndex,
+      vaultAddress: undefined,
     });
 
     const saved = await this.potRepo.save(pot);
@@ -77,10 +79,49 @@ export class PotService {
 
     logger.info(`Pot ${saved.id} created for trader ${input.traderId} in epoch ${input.epochId}`);
 
-    // Fund the pot signer with native STT gas (best-effort) so it can trade.
-    fundGas(signerAddress).catch((err) =>
-      logger.warn(err, `Gas funding for pot signer ${signerAddress} failed — set GAS_FUNDER_PRIVATE_KEY`),
-    );
+    // Deploy vault per pot via factory (async, don't block pot creation)
+    const vaultFactoryAddr = env.VAULT_FACTORY_ADDRESS as Hex | undefined;
+    const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
+    const traderAddr = signerAddress as Hex;
+
+    if (vaultFactoryAddr && operatorKey) {
+      (async () => {
+        try {
+          logger.info(`Deploying vault for pot ${saved.id}...`);
+          const receipt = await factoryDeploy(vaultFactoryAddr, traderAddr, 100_000_000_000n); // 100k tUSDC exposure limit
+
+          // Extract vault address from event logs
+          let vaultAddr: string | null = null;
+          for (const log of receipt.logs) {
+            try {
+              const parsed = decodeEventLog({
+                abi: VAULT_FACTORY_ABI,
+                data: log.data,
+                topics: log.topics,
+              });
+              if (parsed.eventName === "VaultDeployed") {
+                const args = parsed.args as unknown as { vault: string };
+                vaultAddr = args.vault;
+                break;
+              }
+            } catch {}
+          }
+
+          if (vaultAddr) {
+            await this.potRepo.update(saved.id, { vaultAddress: vaultAddr });
+            logger.info(`Vault ${vaultAddr} deployed for pot ${saved.id}`);
+            // Fund gas after deploy to avoid nonce race with the deploy tx
+            fundGas(traderAddr).catch((err) =>
+              logger.warn(err, `Gas funding for pot signer ${traderAddr} failed`),
+            );
+          } else {
+            logger.warn(`Vault deployed but address not found in receipt for pot ${saved.id}`);
+          }
+        } catch (err) {
+          logger.error(err, `Failed to deploy vault for pot ${saved.id}`);
+        }
+      })();
+    }
 
     return saved;
   }
@@ -219,9 +260,21 @@ export class PotService {
     }
     await this.shareRepo.save(share);
 
+    // Call vault.enter() on the pot's vault
+    const vaultAddr = pot.vaultAddress as Hex | undefined;
+    const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
+    if (vaultAddr && operatorKey) {
+      try {
+        const amount = BigInt(Math.floor(input.amountUsd * 1e6)); // tUSDC 6 decimals
+        await vaultDeposit(vaultAddr, operatorKey, amount);
+        logger.info(`Vault deposit confirmed for pot ${pot.id}`);
+      } catch (err) {
+        logger.error(err, `Vault deposit failed for pot ${pot.id}, falling back to sync`);
+      }
+    }
+
     // Update pot totals from on-chain vault state
-    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
-    if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+    if (vaultAddr) {
       await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
     } else {
       // Fallback: update pot totals directly (legacy path)
@@ -252,6 +305,69 @@ export class PotService {
   }
 
   /**
+   * Sync an on-chain vault.enter() deposit into the DB.
+   * Called after the frontend completes a direct vault deposit.
+   */
+  async syncVaultDeposit(input: {
+    potId: string;
+    userId: string;
+    amountUsd: number;
+    shares: number;
+    txHash: string;
+  }): Promise<PotShare> {
+    const pot = await this.potRepo.findOne({ where: { id: input.potId } });
+    if (!pot) throw new Error("Pot not found");
+
+    // Idempotency: skip if this tx was already synced
+    const existingDeposit = await this.depositRepo.findOne({ where: { txHash: input.txHash, potId: input.potId } });
+    if (existingDeposit) {
+      const existingShare = await this.shareRepo.findOne({ where: { userId: input.userId, potId: input.potId } });
+      if (existingShare) return existingShare;
+    }
+
+    // Record deposit
+    const deposit = this.depositRepo.create({
+      id: uuid(),
+      userId: input.userId,
+      potId: input.potId,
+      amountUsd: input.amountUsd,
+      txHash: input.txHash,
+      status: "confirmed",
+    });
+    await this.depositRepo.save(deposit);
+
+    // Upsert shares at 1:1 (amountUsd)
+    let share = await this.shareRepo.findOne({
+      where: { userId: input.userId, potId: input.potId },
+    });
+
+    if (share) {
+      share.shares = Number(share.shares) + input.amountUsd;
+      share.investedUsd = Number(share.investedUsd) + input.amountUsd;
+    } else {
+      share = this.shareRepo.create({
+        id: uuid(),
+        userId: input.userId,
+        potId: input.potId,
+        shares: input.amountUsd,
+        investedUsd: input.amountUsd,
+        claimableUsd: 0,
+      });
+    }
+    await this.shareRepo.save(share);
+
+    // Sync pot totals from on-chain vault state
+    const vaultAddr = pot.vaultAddress as Hex | undefined;
+    if (vaultAddr) {
+      await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
+    }
+
+    logger.info(`Vault deposit synced: ${input.amountUsd} USDC to pot ${input.potId} by user ${input.userId}`);
+
+    return share;
+  }
+
+  /**
    * Withdraw before epoch starts — refunds tUSDC on-chain from the pot signer
    * to the user's wallet, then burns the pro-rata shares.
    */
@@ -274,6 +390,19 @@ export class PotService {
     });
     if (!share || share.shares < input.amountUsd) {
       throw new Error("Insufficient shares");
+    }
+
+    // Call vault.exit() on the pot's vault
+    const vaultAddr = pot.vaultAddress as Hex | undefined;
+    const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
+    if (vaultAddr && operatorKey) {
+      try {
+        const shares = BigInt(Math.floor(input.amountUsd * 1e18)); // 18 decimals for vault shares
+        await vaultWithdraw(vaultAddr, operatorKey, shares);
+        logger.info(`Vault withdraw confirmed for pot ${pot.id}`);
+      } catch (err) {
+        logger.error(err, `Vault withdraw failed for pot ${pot.id}, falling back to sync`);
+      }
     }
 
     // Refund tUSDC on-chain FIRST (transfer-or-fail, no partial ledger change).
@@ -305,8 +434,7 @@ export class PotService {
     }
 
     // Update pot totals from on-chain vault state
-    const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
-    if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+    if (vaultAddr) {
       await syncPotFromVault(vaultAddr, pot.id, this.dataSource);
     } else {
       // Fallback: update pot totals directly (legacy path)
@@ -341,12 +469,5 @@ export class PotService {
    */
   async getShares(potId: string): Promise<PotShare[]> {
     return this.shareRepo.find({ where: { potId } });
-  }
-
-  /**
-   * Update pot NAV (called by trading engine).
-   */
-  async updateNav(potId: string, nav: number, cash: number, deployed: number): Promise<void> {
-    await this.potRepo.update(potId, { nav, cash, deployed });
   }
 }

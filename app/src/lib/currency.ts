@@ -18,12 +18,3 @@ function trim(n: number): string {
 export function stripSymbol(v: string): string {
   return v.replace(/^\s*\$/, "").trim();
 }
-
-/** Plain-text amount for toasts/aria (no icon), e.g. "1,000 B3TR". */
-export function fmtB3tr(n: number, compact = false): string {
-  return `${fmtNum(n, compact)} B3TR`;
-}
-
-export function fmtXp(n: number, compact = false): string {
-  return `${fmtNum(n, compact)} XP`;
-}

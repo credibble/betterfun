@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import { type DataSource } from "typeorm";
+import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
 import { buildAuthRoutes } from "./modules/auth/auth.routes.js";
 import { buildTraderRoutes } from "./modules/traders/trader.routes.js";
@@ -39,13 +40,13 @@ export function buildApp(dataSource: DataSource) {
   app.use("/comments", buildCommentRoutes(dataSource));
 
   // Vault routes (on-chain EventVault + VaultFactory reads)
-  const factoryAddr = process.env.VAULT_FACTORY_ADDRESS as `0x${string}` | undefined;
+  const factoryAddr = env.VAULT_FACTORY_ADDRESS as `0x${string}` | undefined;
   if (factoryAddr) {
     app.use("/vault", buildVaultRoutes(factoryAddr));
   }
 
   // Demo routes — development/testnet only
-  if (process.env.NODE_ENV !== "production") {
+  if (env.NODE_ENV !== "production") {
     app.use("/demo", buildDemoRoutes(dataSource));
   }
 

@@ -25,9 +25,9 @@ export interface LiveMarketInfo {
 export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
   const exchange = getReadExchange();
   try {
-    console.log("Loading live binary markets from DreamDEX");
+    logger.info("Loading live binary markets from DreamDEX");
     const all = await exchange.loadMarkets(true);
-    console.log(`Loaded ${Object.keys(all).length} markets from DreamDEX`);
+    logger.info(`Loaded ${Object.keys(all).length} markets from DreamDEX`);
 
     const results: LiveMarketInfo[] = [];
     for (const m of Object.values(all)) {
@@ -63,7 +63,7 @@ export async function loadLiveBinaryMarkets(): Promise<LiveMarketInfo[]> {
       let downPrice = 0.5;
       try {
         const book = await exchange.fetchOrderBook(m.symbol, 1);
-        console.log(
+        logger.debug(
           `Fetched order book for ${m.symbol}: ${book.bids.length} bids, ${book.asks.length} asks`,
         );
         const bestBid = book.bids?.[0]?.[0];

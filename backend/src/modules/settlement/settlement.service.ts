@@ -18,6 +18,8 @@ import { somniaShannon } from "@somnia-chain/markets-sdk/chains";
 import { env } from "../../config/env.js";
 import { CALC_FEE_SPLIT } from "@betterfun/shared";
 import { logger } from "../../lib/logger.js";
+import { readVaultNav } from "../vault/vault.service.js";
+import { type Hex } from "viem";
 
 const ERC20_ABI = [
   {
@@ -94,6 +96,23 @@ export class SettlementService {
     this.positionRepo = dataSource.getRepository(Position);
   }
 
+  private async readPotSignerBalance(pot: Pot): Promise<number> {
+    try {
+      const decimals = await getCollateralDecimals();
+      const client = createPublicClient({ chain: CHAIN, transport: http() });
+      const balance = await client.readContract({
+        address: COLLATERAL_ADDRESS,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [pot.signerAddress as `0x${string}`],
+      });
+      return Number(formatUnits(balance, decimals));
+    } catch (err) {
+      logger.warn(err, `On-chain balance read failed for pot ${pot.id}, falling back to tracked NAV`);
+      return pot.nav;
+    }
+  }
+
   /**
    * Settle all pots for an epoch.
    */
@@ -137,24 +156,19 @@ export class SettlementService {
     // 1. Redeem winning positions via DreamDEX — throws on infrastructure failure
     const redeemResult = await this.redeemPositions(pot);
 
-    // 2. Compute final NAV from on-chain tUSDC balance
+    // 2. Compute final NAV — prefer vault NAV (authoritative source), fall back to pot signer balance
     let finalNav: number;
-    try {
-      const decimals = await getCollateralDecimals();
-      const client = createPublicClient({ chain: CHAIN, transport: http() });
-      const balance = await client.readContract({
-        address: COLLATERAL_ADDRESS,
-        abi: ERC20_ABI,
-        functionName: "balanceOf",
-        args: [pot.signerAddress as `0x${string}`],
-      });
-      finalNav = Number(formatUnits(balance, decimals));
-    } catch (err) {
-      logger.warn(
-        err,
-        `On-chain balance read failed for pot ${pot.id}, falling back to tracked NAV`,
-      );
-      finalNav = pot.nav;
+    const vaultAddr = pot.vaultAddress as Hex | undefined;
+    if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+      try {
+        const vaultNav = await readVaultNav(vaultAddr);
+        finalNav = Number(formatUnits(vaultNav, 6));
+      } catch (err) {
+        logger.warn(err, `Vault NAV read failed for pot ${pot.id}, falling back to pot signer balance`);
+        finalNav = await this.readPotSignerBalance(pot);
+      }
+    } else {
+      finalNav = await this.readPotSignerBalance(pot);
     }
 
     if (redeemResult.failedMarkets.length > 0) {
@@ -253,7 +267,7 @@ export class SettlementService {
       where: { potId: pot.id, status: "open" },
     });
 
-    console.log(
+    logger.info(
       `Pot ${pot.id} has ${positions.length} open positions to redeem`,
     );
 
@@ -311,7 +325,7 @@ export class SettlementService {
               account: pot.signerAddress as `0x${string}`,
               id: outcomeIdx === 0 ? onchain.yesId : onchain.noId,
             });
-            console.log(
+            logger.info(
               `Pot ${pot.id} market ${marketId} outcome ${outcomeIdx} held: ${held}`,
             );
             if (held > 0n) candidates.push({ outcomeIdx, amount: held });

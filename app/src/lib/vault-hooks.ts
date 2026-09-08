@@ -2,30 +2,32 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { parseUnits, formatUnits } from "viem";
 import { VAULT_ADDRESS, VAULT_ABI, TUSDC_TOKEN } from "./chains";
 
+type VaultAddressParam = `0x${string}` | undefined;
+
 // ─── Read hooks ──────────────────────────────────────────────────────────────
 
 /** Vault NAV in raw collateral units (6dp). */
-export function useVaultNav() {
+export function useVaultNav(vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "nav",
   });
 }
 
 /** Vault share price, 18dp. */
-export function useVaultPrice() {
+export function useVaultPrice(vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "pricePerShare",
   });
 }
 
 /** User's LP share balance. */
-export function useVaultShares(account: `0x${string}` | undefined) {
+export function useVaultShares(account: `0x${string}` | undefined, vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "balanceOf",
     args: account ? [account] : undefined,
@@ -34,36 +36,27 @@ export function useVaultShares(account: `0x${string}` | undefined) {
 }
 
 /** Total LP shares outstanding. */
-export function useVaultTotalSupply() {
+export function useVaultTotalSupply(vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "totalSupply",
   });
 }
 
 /** Directional exposure (|YES - NO|). */
-export function useVaultExposure() {
+export function useVaultExposure(vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "exposure",
   });
 }
 
-/** Whether the vault is halted. */
-export function useVaultHalted() {
-  return useReadContract({
-    address: VAULT_ADDRESS,
-    abi: VAULT_ABI,
-    functionName: "halted",
-  });
-}
-
 /** YES and NO position totals across all pools. */
-export function useVaultPositions() {
+export function useVaultPositions(vaultAddress?: VaultAddressParam) {
   return useReadContract({
-    address: VAULT_ADDRESS,
+    address: vaultAddress ?? VAULT_ADDRESS,
     abi: VAULT_ABI,
     functionName: "positionTotals",
   });
@@ -77,9 +70,10 @@ export function useVaultPositions() {
  *   1. Approve vault to spend tUSDC
  *   2. Call vault.enter(amount)
  */
-export function useVaultDeposit() {
+export function useVaultDeposit(vaultAddress?: VaultAddressParam) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
+  const addr = vaultAddress ?? VAULT_ADDRESS;
 
   const deposit = async (amountUsd: number) => {
     const amount = parseUnits(amountUsd.toFixed(TUSDC_TOKEN.decimals), TUSDC_TOKEN.decimals);
@@ -100,16 +94,18 @@ export function useVaultDeposit() {
         },
       ],
       functionName: "approve",
-      args: [VAULT_ADDRESS, amount],
+      args: [addr, amount],
     });
 
     // Step 2: enter the vault
-    await writeContractAsync({
-      address: VAULT_ADDRESS,
+    const enterHash = await writeContractAsync({
+      address: addr,
       abi: VAULT_ABI,
       functionName: "enter",
       args: [amount],
     });
+
+    return enterHash;
   };
 
   return { deposit, hash, isPending, receipt, error };
@@ -119,13 +115,14 @@ export function useVaultDeposit() {
  * Withdraw tUSDC from the vault by burning LP shares.
  * Calls vault.exit(shares).
  */
-export function useVaultWithdraw() {
+export function useVaultWithdraw(vaultAddress?: VaultAddressParam) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
+  const addr = vaultAddress ?? VAULT_ADDRESS;
 
   const withdraw = async (shares: bigint) => {
     await writeContractAsync({
-      address: VAULT_ADDRESS,
+      address: addr,
       abi: VAULT_ABI,
       functionName: "exit",
       args: [shares],

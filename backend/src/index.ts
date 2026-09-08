@@ -7,6 +7,7 @@ import { initLiveKit } from "./modules/livekit/livekit.service.js";
 import { setupChatWs } from "./modules/livekit/chat-ws.js";
 import { setupWsHub } from "./modules/realtime/ws-hub.js";
 import { TradingService } from "./modules/trading/trading.service.js";
+import { MmBotService } from "./modules/mm/mm-bot.service.js";
 
 async function main() {
   logger.info("Starting BetterFun backend…");
@@ -33,6 +34,17 @@ async function main() {
   const autoRedeemWorker = startAutoRedeemWorker();
   const vaultSyncWorker = startVaultSyncWorker();
   logger.info("BullMQ workers started");
+
+  // Start MM bot if configured
+  if (env.MM_BOT_PRIVATE_KEY) {
+    try {
+      const mmBot = new MmBotService();
+      await mmBot.start();
+      logger.info("MM Bot started");
+    } catch (err) {
+      logger.error(err, "Failed to start MM Bot");
+    }
+  }
 
   // Ensure epoch schedule (create next epoch + schedule transitions)
   await ensureEpochSchedule();
@@ -71,6 +83,7 @@ async function main() {
     await tradingWorker.close();
     await verificationWorker.close();
     await autoRedeemWorker.close();
+    await vaultSyncWorker.close();
     await AppDataSource.destroy();
     logger.info("Database connection closed");
     process.exit(0);

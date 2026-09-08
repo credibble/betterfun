@@ -115,20 +115,4 @@ export class AuthService {
   async getById(id: string): Promise<User | null> {
     return this.userRepo.findOne({ where: { id } });
   }
-
-  /**
-   * Get or create user by wallet address.
-   */
-  async getOrCreateByAddress(address: string): Promise<User> {
-    const lowerAddr = address.toLowerCase();
-    let user = await this.userRepo.findOne({ where: { walletAddress: lowerAddr } });
-    if (!user) {
-      user = this.userRepo.create({
-        walletAddress: lowerAddr,
-        nonce: uuid(),
-      });
-      user = await this.userRepo.save(user);
-    }
-    return user;
-  }
 }

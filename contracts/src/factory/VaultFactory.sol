@@ -91,8 +91,12 @@ contract VaultFactory {
             platformTreasury
         );
 
-        // Grant operator role to the trader, governance stays here.
+        // Grant operator role to the trader.
         v.setOperator(trader);
+
+        // Transfer governance from factory → platform owner so that
+        // approvePool, setHalted, etc. can be called by the platform EOA.
+        v.setGovernance(owner);
 
         vault = address(v);
         vaults.push(VaultInfo({
@@ -121,5 +125,16 @@ contract VaultFactory {
         if (addr == address(0)) revert ZeroAddress();
         platformTreasury = addr;
         emit TreasurySet(addr);
+    }
+
+    /// @notice Transfer governance of a vault deployed by this factory.
+    /// @dev    Allows the platform to move governance from the factory to a
+    ///         multisig / EOA that can then call approvePool, setHalted, etc.
+    function transferVaultGovernance(address vault, address newGovernance)
+        external
+        onlyOwner
+    {
+        if (!isVault[vault]) revert ZeroAddress();
+        EventVault(vault).setGovernance(newGovernance);
     }
 }

@@ -149,11 +149,4 @@ export class EpochService {
       },
     });
   }
-
-  /**
-   * Update pot count and TVL.
-   */
-  async updateStats(id: string, potCount: number, tvl: number): Promise<void> {
-    await this.epochRepo.update(id, { potCount, tvl });
-  }
 }

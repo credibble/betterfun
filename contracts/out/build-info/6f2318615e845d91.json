@@ -1,1 +1,0 @@
-{"id":"6f2318615e845d91","source_id_to_path":{"0":"lib/solmate/src/tokens/ERC20.sol","1":"lib/solmate/src/utils/ReentrancyGuard.sol","2":"lib/solmate/src/utils/SafeTransferLib.sol","3":"src/factory/VaultFactory.sol","4":"src/interfaces/IEventPool.sol","5":"src/interfaces/IOutcomeNft.sol","6":"src/interfaces/ISettlement.sol","7":"src/vault/EventVault.sol"},"language":"Solidity"}

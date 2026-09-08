@@ -402,13 +402,13 @@ contract EventVault is ERC20, ReentrancyGuard {
             _seen[pool] = true;
         }
         approved[pool] = true;
-        positions.setOperator(pool, true);
+        try positions.setOperator(pool, true) {} catch {}
         emit PoolApproved(pool);
     }
 
     function revokePool(address pool) external onlyGov {
         approved[pool] = false;
-        positions.setOperator(pool, false);
+        try positions.setOperator(pool, false) {} catch {}
         emit PoolRevoked(pool);
     }
 

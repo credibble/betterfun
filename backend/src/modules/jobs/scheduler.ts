@@ -42,6 +42,21 @@ function delayToMs(target: Date): number {
   return Math.max(0, target.getTime() - Date.now());
 }
 
+/** Safely add a one-shot delayed job, removing any existing job with the same ID first. */
+async function addDelayedJob(
+  queue: Queue,
+  name: string,
+  data: Record<string, unknown>,
+  opts: { delay: number; jobId: string },
+): Promise<void> {
+  try {
+    await queue.remove(opts.jobId);
+  } catch {
+    // Job may not exist — that's fine
+  }
+  await queue.add(name, data, { delay: opts.delay, jobId: opts.jobId });
+}
+
 /**
  * Are all of an epoch's open-position markets finalized (resolved or voided)?
  * If the epoch has no open positions, this returns true.
@@ -80,8 +95,7 @@ export function startEpochWorker() {
   const worker = new Worker(
     "epochs",
     async (job: Job) => {
-      const { epochId, attempt } = job.data;
-      const action = job.name;
+      const { epochId, action, attempt } = job.data;
 
       switch (action) {
         case "go_live": {
@@ -90,9 +104,6 @@ export function startEpochWorker() {
 
           logger.info(`Epoch ${epoch.number} → live`);
           await epochService.goLive(epochId);
-
-          // Remove the go_live scheduler now that it's fired
-          await epochQueue.removeJobScheduler(`go_live:${epochId}`);
 
           const pots = await potService.list({ epochId });
 
@@ -106,22 +117,17 @@ export function startEpochWorker() {
           for (const pot of pots) {
             await tradingQueue.add("ai-cycle", { potId: pot.id, potIndex: pot.signerIndex }, {
               repeat: { every: env.AI_CYCLE_INTERVAL_MS },
-              jobId: `ai-cycle:${pot.id}`,
+              jobId: `ai-cycle-${pot.id}`,
             });
           }
 
-          // Schedule settling close (with buffer) and final settlement
+          // Schedule settling close (with buffer) and final settlement — one-shot delayed jobs
           const settleAt = new Date(epoch.endsAt.getTime() - env.SETTLEMENT_BUFFER_MIN * 60 * 1000);
-          await epochQueue.upsertJobScheduler(
-            `go_settling:${epochId}`,
-            { every: delayToMs(settleAt) || 86_400_000 },
-            { data: { epochId, action: "go_settling" } },
-          );
-          await epochQueue.upsertJobScheduler(
-            `settle:${epochId}`,
-            { every: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) || 86_400_000 },
-            { data: { epochId, action: "settle" } },
-          );
+          const settleDelay = delayToMs(settleAt);
+          await addDelayedJob(epochQueue, `go_settling-${epochId}`, { epochId, action: "go_settling" }, { delay: settleDelay, jobId: `go_settling-${epochId}` });
+          const finalSettleAt = new Date(epoch.endsAt.getTime() + 5 * 60 * 1000);
+          const finalSettleDelay = delayToMs(finalSettleAt);
+          await addDelayedJob(epochQueue, `settle-${epochId}`, { epochId, action: "settle" }, { delay: finalSettleDelay, jobId: `settle-${epochId}` });
 
           // Roll over: ensure the NEXT epoch exists as "upcoming" so traders can
           // open pots and followers can fund during this epoch's live window.
@@ -143,11 +149,8 @@ export function startEpochWorker() {
           // Stop AI agent cycles for this epoch's pots
           const pots = await potService.list({ epochId });
           for (const pot of pots) {
-            await tradingQueue.removeRepeatableByKey(`ai-cycle:${pot.id}:${env.AI_CYCLE_INTERVAL_MS}`);
+            await tradingQueue.removeRepeatableByKey(`ai-cycle-${pot.id}:${env.AI_CYCLE_INTERVAL_MS}`);
           }
-
-          // Remove the go_settling scheduler now that it's fired
-          await epochQueue.removeJobScheduler(`go_settling:${epochId}`);
 
           break;
         }
@@ -162,9 +165,9 @@ export function startEpochWorker() {
           if (!finalized && attemptCount < SETTLE_MAX_RETRIES) {
             logger.info(`Epoch ${epoch.number}: awaiting market resolution (attempt ${attemptCount + 1})`);
             // Use a one-shot delayed job for retry, not a scheduler
-            await epochQueue.add(`settle-retry:${epochId}`, { epochId, action: "settle", attempt: attemptCount + 1 }, {
+            await epochQueue.add(`settle-retry-${epochId}`, { epochId, action: "settle", attempt: attemptCount + 1 }, {
               delay: SETTLE_RETRY_MS,
-              jobId: `settle-retry:${epochId}:${attemptCount + 1}`,
+              jobId: `settle-retry-${epochId}-${attemptCount + 1}`,
             });
             return;
           }
@@ -176,10 +179,6 @@ export function startEpochWorker() {
           logger.info(`Epoch ${epoch.number} → settling & payout`);
           await settlementService.settleEpoch(epochId);
           await epochService.goSettled(epochId);
-
-          // Remove the settle scheduler now that it's done
-          await epochQueue.removeJobScheduler(`settle:${epochId}`);
-          await epochQueue.removeJobScheduler(`settle_retry:${epochId}`);
 
           // Roll over: ensure the next epoch exists and is scheduled
           const next = await epochService.ensureNext();
@@ -243,38 +242,29 @@ export function startTradingWorker() {
 /**
  * Schedule an epoch's lifecycle transitions. Uses jobId to deduplicate —
  * calling multiple times for the same epoch won't create duplicate jobs.
+ * All epoch transitions use one-shot delayed jobs (add) to prevent
+ * repeated firing that causes infinite epoch cycling.
  */
 async function scheduleEpoch(epochService: EpochService, epoch: any): Promise<void> {
   if (epoch.status === "upcoming") {
-    await epochQueue.upsertJobScheduler(
-      `go_live:${epoch.id}`,
-      { every: delayToMs(new Date(epoch.startsAt)) || 86_400_000 },
-      { data: { epochId: epoch.id, action: "go_live" } },
-    );
-    logger.info(`Scheduled go_live for epoch ${epoch.number} at ${new Date(epoch.startsAt).toISOString()}`);
+    const delay = delayToMs(new Date(epoch.startsAt));
+    if (delay <= 0) {
+      logger.warn(`Epoch ${epoch.number} startsAt is in the past, transitioning to live now`);
+      await epochService.goLive(epoch.id);
+    } else {
+      await addDelayedJob(epochQueue, `go_live-${epoch.id}`, { epochId: epoch.id, action: "go_live" }, { delay, jobId: `go_live-${epoch.id}` });
+      logger.info(`Scheduled go_live for epoch ${epoch.number} in ${Math.round(delay / 1000)}s`);
+    }
   }
 
   if (epoch.status === "live" || epoch.status === "upcoming") {
     const settleAt = new Date(epoch.endsAt.getTime() - env.SETTLEMENT_BUFFER_MIN * 60 * 1000);
-    await epochQueue.upsertJobScheduler(
-      `go_settling:${epoch.id}`,
-      { every: delayToMs(settleAt) || 86_400_000 },
-      { data: { epochId: epoch.id, action: "go_settling" } },
-    );
-    await epochQueue.upsertJobScheduler(
-      `settle:${epoch.id}`,
-      { every: delayToMs(new Date(epoch.endsAt.getTime() + 5 * 60 * 1000)) || 86_400_000 },
-      { data: { epochId: epoch.id, action: "settle" } },
-    );
+    const settleDelay = delayToMs(settleAt);
+    await addDelayedJob(epochQueue, `go_settling-${epoch.id}`, { epochId: epoch.id, action: "go_settling" }, { delay: settleDelay, jobId: `go_settling-${epoch.id}` });
+    const finalSettleAt = new Date(epoch.endsAt.getTime() + 5 * 60 * 1000);
+    const finalSettleDelay = delayToMs(finalSettleAt);
+    await addDelayedJob(epochQueue, `settle-${epoch.id}`, { epochId: epoch.id, action: "settle" }, { delay: finalSettleDelay, jobId: `settle-${epoch.id}` });
     logger.info(`Scheduled go_settling + settle for epoch ${epoch.number}`);
-  }
-
-  if (epoch.status === "settling") {
-    await epochQueue.upsertJobScheduler(
-      `settle_retry:${epoch.id}`,
-      { every: SETTLE_RETRY_MS },
-      { data: { epochId: epoch.id, action: "settle" } },
-    );
   }
 }
 
@@ -329,11 +319,22 @@ export function startAutoRedeemWorker() {
         logger.info(`Auto-redeem cycle: redeemed positions in ${potsRedeemed} pot(s)`);
       }
 
-      // Also run the vault settlement keeper if a vault is deployed.
-      const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
+      // Also run the vault settlement keeper for each pot with a deployed vault.
+      const potRepo = AppDataSource.getRepository(Pot);
+      const pots = await potRepo.find({ where: { status: "trading" } });
       const operatorKey = env.POT_MASTER_SEED as Hex | undefined;
-      if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000" && operatorKey) {
-        await redeemSettledPositions(vaultAddr, operatorKey);
+
+      if (operatorKey) {
+        for (const pot of pots) {
+          const vaultAddr = pot.vaultAddress as Hex | undefined;
+          if (vaultAddr && vaultAddr !== "0x0000000000000000000000000000000000000000") {
+            try {
+              await redeemSettledPositions(vaultAddr, operatorKey);
+            } catch (err) {
+              logger.warn(err, `Vault keeper failed for pot ${pot.id}`);
+            }
+          }
+        }
       }
     },
     { connection, concurrency: 1 },
@@ -354,13 +355,12 @@ export function startVaultSyncWorker() {
   const worker = new Worker(
     "vault-sync",
     async (job: Job) => {
-      const vaultAddr = process.env.VAULT_ADDRESS as Hex | undefined;
-      if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000") return;
-
       const potRepo = AppDataSource.getRepository(Pot);
       const pots = await potRepo.find({ where: { status: "trading" } });
 
       for (const pot of pots) {
+        const vaultAddr = pot.vaultAddress as Hex | undefined;
+        if (!vaultAddr || vaultAddr === "0x0000000000000000000000000000000000000000") continue;
         try {
           await syncPotFromVault(vaultAddr, pot.id, AppDataSource);
         } catch (err) {
