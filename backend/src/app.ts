@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import path from "path";
 import { type DataSource } from "typeorm";
 import { env } from "./config/env.js";
 import { logger } from "./lib/logger.js";
@@ -37,6 +38,9 @@ export function buildApp(dataSource: DataSource) {
   app.use("/livekit", buildLiveKitRoutes());
   app.use("/faucet", buildFaucetRoutes());
   app.use("/upload", buildUploadRoutes());
+
+  // Serve uploaded files statically
+  app.use("/uploads", express.static(path.resolve("uploads")));
   app.use("/comments", buildCommentRoutes(dataSource));
 
   // Vault routes (on-chain EventVault + VaultFactory reads)

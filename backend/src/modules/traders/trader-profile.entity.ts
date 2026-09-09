@@ -66,6 +66,9 @@ export class TraderProfile {
   @Column({ type: "boolean", default: false })
   isLive!: boolean;
 
+  @Column({ type: "varchar", length: 500, nullable: true })
+  videoUrl?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

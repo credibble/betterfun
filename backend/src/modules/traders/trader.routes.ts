@@ -26,6 +26,7 @@ function serializeTrader(t: TraderProfile) {
     followers: Number(t.followers),
     aum: Number(t.aum),
     isLive: t.isLive,
+    videoUrl: t.videoUrl ?? undefined,
     createdAt: t.createdAt.toISOString(),
     updatedAt: t.updatedAt.toISOString(),
   };
@@ -96,6 +97,30 @@ export function buildTraderRoutes(dataSource: DataSource) {
       }
 
       trader.isLive = isLive;
+      const saved = await repo.save(trader);
+      res.json(serializeTrader(saved));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Internal error";
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // PATCH /traders/me/video — update the caller's offline livestream video URL
+  router.patch("/me/video", requireAuth, requireTrader, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { videoUrl } = req.body ?? {};
+      if (typeof videoUrl !== "string") {
+        res.status(400).json({ error: "videoUrl string required" });
+        return;
+      }
+
+      const trader = await repo.findOne({ where: { userId: req.claims!.sub } });
+      if (!trader) {
+        res.status(404).json({ error: "No trader profile yet" });
+        return;
+      }
+
+      trader.videoUrl = videoUrl || undefined;
       const saved = await repo.save(trader);
       res.json(serializeTrader(saved));
     } catch (err) {
