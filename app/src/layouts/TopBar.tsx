@@ -11,6 +11,7 @@ import { LoginButton } from "@/components/auth/LoginButton";
 
 const NAV_LINKS = [
   { to: "/", label: "Discover" },
+  { to: "/demo", label: "Demo" },
   { to: "/traders", label: "Traders" },
   { to: "/pots", label: "Pots" },
   { to: "/epochs", label: "Epochs" },

@@ -16,6 +16,7 @@ import { Route as PortfolioRouteImport } from "./routes/portfolio"
 import { Route as LeaderboardRouteImport } from "./routes/leaderboard"
 import { Route as EpochsRouteImport } from "./routes/epochs"
 import { Route as EarnRouteImport } from "./routes/earn"
+import { Route as DemoRouteImport } from "./routes/demo"
 import { Route as BecomeATraderRouteImport } from "./routes/become-a-trader"
 import { Route as IndexRouteImport } from "./routes/index"
 import { Route as TradersIndexRouteImport } from "./routes/traders.index"
@@ -59,6 +60,11 @@ const EpochsRoute = EpochsRouteImport.update({
 const EarnRoute = EarnRouteImport.update({
   id: "/earn",
   path: "/earn",
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DemoRoute = DemoRouteImport.update({
+  id: "/demo",
+  path: "/demo",
   getParentRoute: () => rootRouteImport,
 } as any)
 const BecomeATraderRoute = BecomeATraderRouteImport.update({
@@ -110,6 +116,7 @@ const BecomeATraderSettingsRoute = BecomeATraderSettingsRouteImport.update({
 export interface FileRoutesByFullPath {
   "/": typeof IndexRoute
   "/become-a-trader": typeof BecomeATraderRouteWithChildren
+  "/demo": typeof DemoRoute
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
   "/leaderboard": typeof LeaderboardRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/": typeof IndexRoute
+  "/demo": typeof DemoRoute
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
   "/leaderboard": typeof LeaderboardRoute
@@ -146,6 +154,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   "/": typeof IndexRoute
   "/become-a-trader": typeof BecomeATraderRouteWithChildren
+  "/demo": typeof DemoRoute
   "/earn": typeof EarnRoute
   "/epochs": typeof EpochsRoute
   "/leaderboard": typeof LeaderboardRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
   fullPaths:
     | "/"
     | "/become-a-trader"
+    | "/demo"
     | "/earn"
     | "/epochs"
     | "/leaderboard"
@@ -183,6 +193,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | "/"
+    | "/demo"
     | "/earn"
     | "/epochs"
     | "/leaderboard"
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | "__root__"
     | "/"
     | "/become-a-trader"
+    | "/demo"
     | "/earn"
     | "/epochs"
     | "/leaderboard"
@@ -220,6 +232,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BecomeATraderRoute: typeof BecomeATraderRouteWithChildren
+  DemoRoute: typeof DemoRoute
   EarnRoute: typeof EarnRoute
   EpochsRoute: typeof EpochsRoute
   LeaderboardRoute: typeof LeaderboardRoute
@@ -283,6 +296,13 @@ declare module "@tanstack/react-router" {
       path: "/earn"
       fullPath: "/earn"
       preLoaderRoute: typeof EarnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    "/demo": {
+      id: "/demo"
+      path: "/demo"
+      fullPath: "/demo"
+      preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
     "/become-a-trader": {
@@ -368,6 +388,7 @@ const BecomeATraderRouteWithChildren = BecomeATraderRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BecomeATraderRoute: BecomeATraderRouteWithChildren,
+  DemoRoute: DemoRoute,
   EarnRoute: EarnRoute,
   EpochsRoute: EpochsRoute,
   LeaderboardRoute: LeaderboardRoute,
