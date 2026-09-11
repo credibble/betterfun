@@ -3,6 +3,7 @@ import { useAccount } from "wagmi";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { TraderRegistryAbi, ADDRESSES } from "../contracts";
 import { getTraders, getTrader, type SubgraphTrader } from "../subgraph";
+import { hasStreamOverride, getStreamOverride } from "../stream-overrides";
 import type { TraderView } from "../types";
 
 /** Parse the on-chain JSON metadata string stored in TraderRegistry. */
@@ -25,7 +26,9 @@ export function parseTraderMetadata(raw: string): TraderMetadata {
       bio: typeof parsed.bio === "string" ? parsed.bio : undefined,
       avatarUrl: typeof parsed.avatarUrl === "string" ? parsed.avatarUrl : undefined,
       country: typeof parsed.country === "string" ? parsed.country : undefined,
-      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t) => typeof t === "string") : undefined,
+      tags: Array.isArray(parsed.tags)
+        ? parsed.tags.filter((t) => typeof t === "string")
+        : undefined,
     };
   } catch {
     return {};
@@ -49,8 +52,8 @@ function sgTraderToView(sg: SubgraphTrader): TraderView {
     pnl30: 0,
     winRate: 0,
     aum: 0,
-    isLive: false,
-    videoUrl: undefined,
+    isLive: hasStreamOverride(sg.id),
+    videoUrl: getStreamOverride(sg.id) ?? undefined,
     followers: 0,
     createdAt: sg.registeredAt,
     updatedAt: sg.updatedAt,
@@ -60,7 +63,11 @@ function sgTraderToView(sg: SubgraphTrader): TraderView {
 // ── Subgraph reads ──────────────────────────────────────────────────────────
 
 export function useTraders() {
-  const { data: sgTraders = [], isLoading, error } = useQuery<SubgraphTrader[]>({
+  const {
+    data: sgTraders = [],
+    isLoading,
+    error,
+  } = useQuery<SubgraphTrader[]>({
     queryKey: ["subgraph", "traders"],
     queryFn: () => getTraders(),
     staleTime: 30_000,
@@ -71,7 +78,11 @@ export function useTraders() {
 }
 
 export function useTrader(id: string) {
-  const { data: sgTrader, isLoading, error } = useQuery<SubgraphTrader | null>({
+  const {
+    data: sgTrader,
+    isLoading,
+    error,
+  } = useQuery<SubgraphTrader | null>({
     queryKey: ["subgraph", "trader", id],
     queryFn: () => getTrader(id),
     enabled: !!id,
@@ -100,16 +111,18 @@ export function useMyTrader() {
   const data = (() => {
     if (!address) return null;
 
-    const oc = onChainProfile as unknown as {
-      metadata: string;
-      payoutAddress: string;
-      traderType: number;
-      verified: boolean;
-      active: boolean;
-      registeredAt: bigint;
-      potCount: bigint;
-      totalAUM: bigint;
-    } | undefined;
+    const oc = onChainProfile as unknown as
+      | {
+          metadata: string;
+          payoutAddress: string;
+          traderType: number;
+          verified: boolean;
+          active: boolean;
+          registeredAt: bigint;
+          potCount: bigint;
+          totalAUM: bigint;
+        }
+      | undefined;
 
     if (!oc || (oc.registeredAt ?? 0n) === 0n) return null;
 
@@ -236,11 +249,7 @@ export function useRegisterTraderOnChain() {
       address: ADDRESSES.TRADER_REGISTRY,
       abi: TraderRegistryAbi,
       functionName: "registerTrader",
-      args: [
-        input.metadata,
-        input.payoutAddress ?? address,
-        input.traderType === "ai" ? 1 : 0,
-      ],
+      args: [input.metadata, input.payoutAddress ?? address, input.traderType === "ai" ? 1 : 0],
     });
   };
 

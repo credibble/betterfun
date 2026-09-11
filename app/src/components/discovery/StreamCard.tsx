@@ -3,6 +3,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
 import type { TraderView as Trader } from "@/lib/types";
+import { getStreamOverride } from "@/lib/stream-overrides";
 
 type StreamCardProps = {
   trader: Trader;
@@ -10,7 +11,8 @@ type StreamCardProps = {
 };
 
 export default function StreamCard({ trader, featured }: StreamCardProps) {
-  const isLive = trader.isLive;
+  const overrideUrl = getStreamOverride(trader.id);
+  const isLive = trader.isLive || !!overrideUrl;
   const pnl = trader.pnl30 ?? 0;
 
   return (
@@ -19,23 +21,37 @@ export default function StreamCard({ trader, featured }: StreamCardProps) {
       params={{ id: trader.id }}
       className={cn(
         "group relative overflow-hidden rounded-xl border bg-card transition-all hover:shadow-lg hover:ring-2 hover:ring-primary/20",
-        featured && "col-span-2 row-span-2"
+        featured && "col-span-2 row-span-2",
       )}
     >
       {/* Thumbnail */}
-      <div className={cn(
-        "relative bg-gradient-to-br from-purple-900/50 to-blue-900/50",
-        featured ? "aspect-video" : "aspect-video"
-      )}>
+      <div
+        className={cn(
+          "relative overflow-hidden bg-gradient-to-br from-purple-900/50 to-blue-900/50",
+          featured ? "aspect-video" : "aspect-video",
+        )}
+      >
+        {overrideUrl && (
+          <video
+            src={overrideUrl}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
         {isLive ? (
           <>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-lg font-bold text-white">
-                  {trader.name?.charAt(0)?.toUpperCase() ?? "T"}
+            {!overrideUrl && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="h-16 w-16 rounded-full bg-primary/20 flex items-center justify-center">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-lg font-bold text-white">
+                    {trader.name?.charAt(0)?.toUpperCase() ?? "T"}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             <Badge className="absolute top-2 left-2 bg-red-500 hover:bg-red-600 text-white text-[10px] h-5">
               LIVE
             </Badge>
@@ -74,7 +90,8 @@ export default function StreamCard({ trader, featured }: StreamCardProps) {
             </p>
           </div>
           <span className={cn("text-sm font-bold", pnl >= 0 ? "text-green-500" : "text-red-500")}>
-            {pnl >= 0 ? "+" : ""}{pnl.toFixed(1)}%
+            {pnl >= 0 ? "+" : ""}
+            {pnl.toFixed(1)}%
           </span>
         </div>
       </div>
