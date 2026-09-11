@@ -44,12 +44,14 @@ export const Route = createFileRoute("/pots/$id")({
 
 function PotDetailPage() {
   const { id } = Route.useParams();
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  // Pot id is the vault address (0x...) or a legacy UUID. Anything else is a
+  // trader handle slug that we resolve to the trader's current pot.
+  const isDirectId = /^0x[0-9a-fA-F]{40}$/.test(id) || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
   // The slug is the trader's handle; resolve it to their current pot.
-  const { data: potById, isLoading: potByIdLoading } = usePot(isUuid ? id : "");
+  const { data: potById, isLoading: potByIdLoading } = usePot(isDirectId ? id : "");
   const { data: traders = [], isLoading: tradersLoading } = useTraders();
-  const handleTrader = !isUuid
+  const handleTrader = !isDirectId
     ? (Array.isArray(traders) ? traders : []).find((t) => t.handle === id)
     : undefined;
   const { data: potsByTrader = [], isLoading: potsLoading } = usePots(
@@ -59,8 +61,8 @@ function PotDetailPage() {
     ? (Array.isArray(potsByTrader) ? potsByTrader : [])[0]
     : undefined;
 
-  const pot = isUuid ? potById : potByHandle;
-  const isLoading = isUuid ? potByIdLoading : tradersLoading || potsLoading;
+  const pot = isDirectId ? potById : potByHandle;
+  const isLoading = isDirectId ? potByIdLoading : tradersLoading || potsLoading;
 
   const { data: epoch } = useEpoch(pot?.epochId ?? "");
   const { data: trader } = useTrader(pot?.traderId ?? "");

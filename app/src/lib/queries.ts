@@ -9,6 +9,7 @@ export {
   useLatestEpochId,
   useIsFundingOpen,
   useIsTradingOpen,
+  useFastForwardEpoch,
 } from "./hooks/use-epochs";
 
 export {
@@ -30,6 +31,7 @@ export {
   useRegisterTraderOnChain,
   useUpdateTraderMetadata,
   useUpdatePayoutAddress,
+  useUploadImage,
   buildTraderMetadata,
 } from "./hooks/use-traders";
 

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Maximize, Minimize, Volume2, VolumeX, Radio } from "lucide-react";
 import { useLiveKitToken } from "@/lib/queries";
+import { getStreamOverride } from "@/lib/stream-overrides";
 
 type StreamPlayerProps = {
   traderId: string;
@@ -24,7 +25,8 @@ export default function StreamPlayer({
   className,
 }: StreamPlayerProps) {
   const tokenMutation = useLiveKitToken();
-  const [status, setStatus] = useState<Status>(isLive ? "connecting" : "offline");
+  const overrideUrl = getStreamOverride(traderId);
+  const [status, setStatus] = useState<Status>(overrideUrl ? "live" : isLive ? "connecting" : "offline");
   const [isMuted, setIsMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +38,7 @@ export default function StreamPlayer({
     : "";
 
   useEffect(() => {
+    if (overrideUrl) return;
     if (!room || !isLive) {
       setStatus("offline");
       return;
@@ -115,13 +118,25 @@ export default function StreamPlayer({
     <div className={cn("relative bg-black rounded-lg overflow-hidden", className)}>
       {/* Video container */}
       <div className="aspect-video relative">
-        <div
-          ref={containerRef}
-          className="absolute inset-0 flex items-center justify-center [&>video]:h-full [&>video]:w-full [&>video]:object-contain"
-        />
+        {overrideUrl ? (
+          <video
+            src={overrideUrl}
+            autoPlay
+            loop
+            muted={isMuted}
+            playsInline
+            controls
+            className="absolute inset-0 h-full w-full object-contain"
+          />
+        ) : (
+          <div
+            ref={containerRef}
+            className="absolute inset-0 flex items-center justify-center [&>video]:h-full [&>video]:w-full [&>video]:object-contain"
+          />
+        )}
 
         {/* Offline / connecting overlay */}
-        {status !== "live" && (
+        {!overrideUrl && status !== "live" && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-gradient-to-br from-purple-900/80 to-blue-900/80">
             <div className="text-center">
               {status === "connecting" ? (
@@ -155,28 +170,30 @@ export default function StreamPlayer({
         )}
 
         {/* Controls */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        {!overrideUrl && (
+          <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-black/80 to-transparent opacity-0 hover:opacity-100 transition-opacity">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-white hover:bg-white/20"
+                  onClick={() => setIsMuted(!isMuted)}
+                >
+                  {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </Button>
+              </div>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-white hover:bg-white/20"
-                onClick={() => setIsMuted(!isMuted)}
+                onClick={toggleFullscreen}
               >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
               </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-white hover:bg-white/20"
-              onClick={toggleFullscreen}
-            >
-              {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            </Button>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

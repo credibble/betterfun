@@ -1,6 +1,6 @@
-import { useReadContract } from "wagmi";
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { EpochControllerAbi, ADDRESSES } from "../contracts";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getEpochs, getEpoch, type SubgraphEpoch } from "../subgraph";
 
 function mapEpochState(s: string): "upcoming" | "live" | "settling" | "settled" {
@@ -146,4 +146,41 @@ export function useIsTradingOpen(epochId: bigint | undefined) {
     args: epochId !== undefined ? [epochId] : undefined,
     query: { enabled: epochId !== undefined },
   });
+}
+
+// ── Epoch lifecycle transitions (keeper-style, callable by anyone) ────────────
+
+/**
+ * Fast-forward an epoch by calling the appropriate EpochController transition
+ * based on its current status:
+ *   UPCOMING → goLive, LIVE → goSettling, SETTLING → goSettled.
+ * The contract still enforces its time gates, so a premature call reverts.
+ */
+export function useFastForwardEpoch() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash });
+  const qc = useQueryClient();
+
+  const fastForward = async (epochId: string, status: string) => {
+    const id = BigInt(epochId);
+    const fn =
+      status === "upcoming" ? "goLive" :
+      status === "live" ? "goSettling" :
+      status === "settling" ? "goSettled" :
+      null;
+    if (!fn) throw new Error("Epoch is already settled");
+
+    await writeContractAsync({
+      address: ADDRESSES.EPOCH_CONTROLLER,
+      abi: EpochControllerAbi,
+      functionName: fn,
+      args: [id],
+    });
+
+    qc.invalidateQueries({ queryKey: ["subgraph", "epochs"] });
+    qc.invalidateQueries({ queryKey: ["subgraph", "epoch"] });
+    qc.invalidateQueries({ queryKey: ["subgraph", "pots"] });
+  };
+
+  return { fastForward, hash, isPending, receipt, error };
 }

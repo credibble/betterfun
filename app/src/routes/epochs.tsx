@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Users } from "lucide-react";
+import { ArrowRight, FastForward, Users } from "lucide-react";
+import { toast } from "sonner";
 import TopBar from "@/layouts/TopBar";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
-import { useEpochs, useActiveEpoch, usePots } from "@/lib/queries";
+import { useEpochs, useActiveEpoch, usePots, useFastForwardEpoch } from "@/lib/queries";
 
 type EpochView = {
   id: string;
@@ -145,6 +146,26 @@ function EpochsPage() {
 
 function SelectedEpochPanel({ epoch }: { epoch: EpochView }) {
   const { data: pots = [] } = usePots({ epochId: epoch.id });
+  const fastForward = useFastForwardEpoch();
+
+  const nextAction =
+    epoch.status === "upcoming" ? "Go live (open funding)" :
+    epoch.status === "live" ? "Go settling (lock trading)" :
+    epoch.status === "settling" ? "Settle (finalize)" :
+    null;
+
+  const onFastForward = () => {
+    fastForward.fastForward(epoch.id, epoch.status)
+      .then(() => toast.success(`Epoch #${epoch.number} advanced → ${nextAction}`))
+      .catch((err: Error) => {
+        const msg = err?.message ?? "Fast-forward failed";
+        if (/TooEarly|EpochNot/i.test(msg)) {
+          toast.error("Transition not ready", { description: "The epoch's time gate hasn't elapsed yet." });
+        } else {
+          toast.error(msg);
+        }
+      });
+  };
 
   return (
     <section className="mt-6 rounded-xl border border-border bg-card p-5">
@@ -164,6 +185,23 @@ function SelectedEpochPanel({ epoch }: { epoch: EpochView }) {
           <p className="mt-1 text-xs text-muted-foreground">{epoch.potCount} pots</p>
         </div>
       </div>
+
+      {nextAction && (
+        <div className="mt-4 flex items-center gap-3 rounded-lg border border-dashed border-border bg-secondary/20 px-3 py-2.5">
+          <FastForward className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <p className="text-xs text-muted-foreground">
+            Advance this epoch to its next phase ({nextAction}).
+          </p>
+          <button
+            type="button"
+            onClick={onFastForward}
+            disabled={fastForward.isPending}
+            className="ml-auto shrink-0 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition-all hover:brightness-110 disabled:opacity-50"
+          >
+            {fastForward.isPending ? "Advancing…" : "Fast-forward"}
+          </button>
+        </div>
+      )}
 
       {pots.length > 0 ? (
         <div className="mt-4 border-t border-border pt-4">

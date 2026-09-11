@@ -16,8 +16,8 @@ function formatUsd(n: number): string {
 
 function potPhase(epochStatus?: string): string {
   switch (epochStatus) {
-    case "upcoming": return "Funding open";
-    case "live": return "Live";
+    case "upcoming": return "Upcoming";
+    case "live": return "Funding open";
     case "settling": return "Settling";
     case "settled": return "Settled";
     default: return epochStatus ?? "";
@@ -97,7 +97,7 @@ export function StakePanel({
       toast.error("Vault not deployed yet");
       return;
     }
-    if (epoch?.status !== "upcoming") {
+    if (epoch?.status !== "live") {
       toast.error("Staking closed", { description: `${potPhase(epoch?.status)} — stake only while funding is open.` });
       return;
     }
@@ -261,7 +261,7 @@ export function StakePanel({
 
       <ActionPairTabs className="mb-4" value={mode} onChange={setMode} options={tabs} />
 
-      {hasVault && epoch?.status !== "upcoming" && mode !== "claim" && (
+      {(epoch?.status === "settling" || epoch?.status === "settled") && mode !== "claim" && (
         <div className="mb-3 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] text-foreground">
           <Lock className="mt-0.5 h-3.5 shrink-0 text-warn" />
           <p>

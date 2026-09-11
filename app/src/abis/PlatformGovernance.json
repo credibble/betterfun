@@ -1,487 +1,523 @@
-[
-  {
-    "type": "constructor",
-    "inputs": [
-      {
-        "name": "_treasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_maxExposure",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_minDeposit",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "_maxPotsPerTrader",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "config",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "lpShare",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "traderShare",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "protocolShare",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "protocolTreasury",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "maxExposureDefault",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minDeposit",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxPotsPerTrader",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "paused",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getConfig",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct PlatformGovernance.PlatformConfig",
-        "components": [
-          {
-            "name": "lpShare",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "traderShare",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "protocolShare",
-            "type": "uint8",
-            "internalType": "uint8"
-          },
-          {
-            "name": "protocolTreasury",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "maxExposureDefault",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "minDeposit",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "maxPotsPerTrader",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "paused",
-            "type": "bool",
-            "internalType": "bool"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "governance",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isDepositValid",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isOperator",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "owner",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "setFeeSplit",
-    "inputs": [
-      {
-        "name": "lp",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "trader",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "protocol",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setGovernance",
-    "inputs": [
-      {
-        "name": "addr",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setMaxExposure",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setMaxPotsPerTrader",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setMinDeposit",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setOperator",
-    "inputs": [
-      {
-        "name": "op",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "status",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setOwner",
-    "inputs": [
-      {
-        "name": "addr",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setPaused",
-    "inputs": [
-      {
-        "name": "flag",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "setTreasury",
-    "inputs": [
-      {
-        "name": "addr",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "event",
-    "name": "FeeSplitSet",
-    "inputs": [
-      {
-        "name": "lp",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      },
-      {
-        "name": "trader",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      },
-      {
-        "name": "protocol",
-        "type": "uint8",
-        "indexed": false,
-        "internalType": "uint8"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "GovernanceSet",
-    "inputs": [
-      {
-        "name": "newGov",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "MaxExposureSet",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "MaxPotsPerTraderSet",
-    "inputs": [
-      {
-        "name": "limit",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "MinDepositSet",
-    "inputs": [
-      {
-        "name": "amount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OperatorSet",
-    "inputs": [
-      {
-        "name": "op",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "status",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OwnerSet",
-    "inputs": [
-      {
-        "name": "newOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "PausedSet",
-    "inputs": [
-      {
-        "name": "paused",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "TreasurySet",
-    "inputs": [
-      {
-        "name": "addr",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "InvalidFeeSplit",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyGovernance",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyOperator",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyOwner",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ZeroAddress",
-    "inputs": []
-  }
+﻿[
+    {
+        "type":  "constructor",
+        "inputs":  [
+                       {
+                           "name":  "_treasury",
+                           "type":  "address",
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "_maxExposure",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       },
+                       {
+                           "name":  "_minDeposit",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       },
+                       {
+                           "name":  "_maxPotsPerTrader",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "config",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "lpShare",
+                            "type":  "uint8",
+                            "internalType":  "uint8"
+                        },
+                        {
+                            "name":  "traderShare",
+                            "type":  "uint8",
+                            "internalType":  "uint8"
+                        },
+                        {
+                            "name":  "protocolShare",
+                            "type":  "uint8",
+                            "internalType":  "uint8"
+                        },
+                        {
+                            "name":  "protocolTreasury",
+                            "type":  "address",
+                            "internalType":  "address"
+                        },
+                        {
+                            "name":  "maxExposureDefault",
+                            "type":  "uint256",
+                            "internalType":  "uint256"
+                        },
+                        {
+                            "name":  "minDeposit",
+                            "type":  "uint256",
+                            "internalType":  "uint256"
+                        },
+                        {
+                            "name":  "maxPotsPerTrader",
+                            "type":  "uint256",
+                            "internalType":  "uint256"
+                        },
+                        {
+                            "name":  "paused",
+                            "type":  "bool",
+                            "internalType":  "bool"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "getConfig",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "tuple",
+                            "internalType":  "struct PlatformGovernance.PlatformConfig",
+                            "components":  [
+                                               {
+                                                   "name":  "lpShare",
+                                                   "type":  "uint8",
+                                                   "internalType":  "uint8"
+                                               },
+                                               {
+                                                   "name":  "traderShare",
+                                                   "type":  "uint8",
+                                                   "internalType":  "uint8"
+                                               },
+                                               {
+                                                   "name":  "protocolShare",
+                                                   "type":  "uint8",
+                                                   "internalType":  "uint8"
+                                               },
+                                               {
+                                                   "name":  "protocolTreasury",
+                                                   "type":  "address",
+                                                   "internalType":  "address"
+                                               },
+                                               {
+                                                   "name":  "maxExposureDefault",
+                                                   "type":  "uint256",
+                                                   "internalType":  "uint256"
+                                               },
+                                               {
+                                                   "name":  "minDeposit",
+                                                   "type":  "uint256",
+                                                   "internalType":  "uint256"
+                                               },
+                                               {
+                                                   "name":  "maxPotsPerTrader",
+                                                   "type":  "uint256",
+                                                   "internalType":  "uint256"
+                                               },
+                                               {
+                                                   "name":  "paused",
+                                                   "type":  "bool",
+                                                   "internalType":  "bool"
+                                               }
+                                           ]
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "governance",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "address",
+                            "internalType":  "address"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "isDepositValid",
+        "inputs":  [
+                       {
+                           "name":  "amount",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "bool",
+                            "internalType":  "bool"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "isOperator",
+        "inputs":  [
+                       {
+                           "name":  "",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "bool",
+                            "internalType":  "bool"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "owner",
+        "inputs":  [
+
+                   ],
+        "outputs":  [
+                        {
+                            "name":  "",
+                            "type":  "address",
+                            "internalType":  "address"
+                        }
+                    ],
+        "stateMutability":  "view"
+    },
+    {
+        "type":  "function",
+        "name":  "setFeeSplit",
+        "inputs":  [
+                       {
+                           "name":  "lp",
+                           "type":  "uint8",
+                           "internalType":  "uint8"
+                       },
+                       {
+                           "name":  "trader",
+                           "type":  "uint8",
+                           "internalType":  "uint8"
+                       },
+                       {
+                           "name":  "protocol",
+                           "type":  "uint8",
+                           "internalType":  "uint8"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setGovernance",
+        "inputs":  [
+                       {
+                           "name":  "addr",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setMaxExposure",
+        "inputs":  [
+                       {
+                           "name":  "limit",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setMaxPotsPerTrader",
+        "inputs":  [
+                       {
+                           "name":  "limit",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setMinDeposit",
+        "inputs":  [
+                       {
+                           "name":  "amount",
+                           "type":  "uint256",
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setOperator",
+        "inputs":  [
+                       {
+                           "name":  "op",
+                           "type":  "address",
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "status",
+                           "type":  "bool",
+                           "internalType":  "bool"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setOwner",
+        "inputs":  [
+                       {
+                           "name":  "addr",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setPaused",
+        "inputs":  [
+                       {
+                           "name":  "flag",
+                           "type":  "bool",
+                           "internalType":  "bool"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "function",
+        "name":  "setTreasury",
+        "inputs":  [
+                       {
+                           "name":  "addr",
+                           "type":  "address",
+                           "internalType":  "address"
+                       }
+                   ],
+        "outputs":  [
+
+                    ],
+        "stateMutability":  "nonpayable"
+    },
+    {
+        "type":  "event",
+        "name":  "FeeSplitSet",
+        "inputs":  [
+                       {
+                           "name":  "lp",
+                           "type":  "uint8",
+                           "indexed":  false,
+                           "internalType":  "uint8"
+                       },
+                       {
+                           "name":  "trader",
+                           "type":  "uint8",
+                           "indexed":  false,
+                           "internalType":  "uint8"
+                       },
+                       {
+                           "name":  "protocol",
+                           "type":  "uint8",
+                           "indexed":  false,
+                           "internalType":  "uint8"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "GovernanceSet",
+        "inputs":  [
+                       {
+                           "name":  "newGov",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "MaxExposureSet",
+        "inputs":  [
+                       {
+                           "name":  "limit",
+                           "type":  "uint256",
+                           "indexed":  false,
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "MaxPotsPerTraderSet",
+        "inputs":  [
+                       {
+                           "name":  "limit",
+                           "type":  "uint256",
+                           "indexed":  false,
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "MinDepositSet",
+        "inputs":  [
+                       {
+                           "name":  "amount",
+                           "type":  "uint256",
+                           "indexed":  false,
+                           "internalType":  "uint256"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "OperatorSet",
+        "inputs":  [
+                       {
+                           "name":  "op",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       },
+                       {
+                           "name":  "status",
+                           "type":  "bool",
+                           "indexed":  false,
+                           "internalType":  "bool"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "OwnerSet",
+        "inputs":  [
+                       {
+                           "name":  "newOwner",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "PausedSet",
+        "inputs":  [
+                       {
+                           "name":  "paused",
+                           "type":  "bool",
+                           "indexed":  false,
+                           "internalType":  "bool"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "event",
+        "name":  "TreasurySet",
+        "inputs":  [
+                       {
+                           "name":  "addr",
+                           "type":  "address",
+                           "indexed":  true,
+                           "internalType":  "address"
+                       }
+                   ],
+        "anonymous":  false
+    },
+    {
+        "type":  "error",
+        "name":  "InvalidFeeSplit",
+        "inputs":  [
+
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "OnlyGovernance",
+        "inputs":  [
+
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "OnlyOperator",
+        "inputs":  [
+
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "OnlyOwner",
+        "inputs":  [
+
+                   ]
+    },
+    {
+        "type":  "error",
+        "name":  "ZeroAddress",
+        "inputs":  [
+
+                   ]
+    }
 ]

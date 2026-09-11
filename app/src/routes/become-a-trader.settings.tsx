@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef } from "react";
-import { ArrowLeft, Bot, Save, UserCircle2, Camera } from "lucide-react";
+import { ArrowLeft, Bot, Save, UserCircle2, Camera, Loader2 } from "lucide-react";
 import TopBar from "@/layouts/TopBar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useMyTraderProfile, useRegisterTraderOnChain, useUpdateTraderMetadata, buildTraderMetadata } from "@/lib/queries";
+import { useMyTraderProfile, useRegisterTraderOnChain, useUpdateTraderMetadata, useUploadImage, buildTraderMetadata } from "@/lib/queries";
 
 const COUNTRIES = [
   "Argentina",
@@ -69,6 +69,7 @@ function TraderSettingsPage() {
   const { data: myTrader, isLoading: meLoading, onChainExists } = useMyTraderProfile();
   const registerOnChain = useRegisterTraderOnChain();
   const updateMetadata = useUpdateTraderMetadata();
+  const uploadImage = useUploadImage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
@@ -120,14 +121,15 @@ function TraderSettingsPage() {
       return;
     }
 
-    // Avatar is stored on-chain as a URL string in the JSON metadata.
-    // For now, paste a hosted URL directly — no backend upload.
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarUrl(String(reader.result));
-      toast.success("Image selected");
-    };
-    reader.readAsDataURL(file);
+    // Upload to Cloudinary via the backend; the returned URL is stored in the
+    // on-chain trader metadata JSON.
+    uploadImage.mutate(file, {
+      onSuccess: (data) => {
+        setAvatarUrl(data.url);
+        toast.success("Image uploaded");
+      },
+      onError: (err: Error) => toast.error(err?.message ?? "Upload failed"),
+    });
   };
 
   const save = async () => {
@@ -304,9 +306,12 @@ function TraderSettingsPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
+                  disabled={uploadImage.isPending}
                   className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary/50 transition-colors"
                 >
-                  {avatarUrl ? (
+                  {uploadImage.isPending ? (
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  ) : avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                   ) : (
                     <Camera className="h-6 w-6 text-muted-foreground" />
@@ -316,12 +321,13 @@ function TraderSettingsPage() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadImage.isPending}
                     className="text-sm font-medium text-primary hover:underline"
                   >
                     {avatarUrl ? "Change image" : "Upload image"}
                   </button>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    JPG, PNG or GIF · max 5MB (stored as data URL on-chain)
+                    JPG, PNG or GIF · max 5MB
                   </p>
                 </div>
               </div>

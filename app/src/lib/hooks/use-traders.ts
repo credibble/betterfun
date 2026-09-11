@@ -1,6 +1,6 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useAccount } from "wagmi";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { TraderRegistryAbi, ADDRESSES } from "../contracts";
 import { getTraders, getTrader, type SubgraphTrader } from "../subgraph";
 import type { TraderView } from "../types";
@@ -284,4 +284,21 @@ export function useUpdatePayoutAddress() {
   };
 
   return { updatePayoutAddress, hash, isPending, receipt, error };
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+
+/**
+ * Upload an image to Cloudinary via the backend. Returns the hosted URL,
+ * which is then stored in the on-chain trader metadata JSON.
+ */
+export function useUploadImage() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const { apiUpload } = await import("../api-client");
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiUpload<{ url: string; publicId: string }>("/upload/image", formData);
+    },
+  });
 }

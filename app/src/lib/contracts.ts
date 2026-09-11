@@ -3,7 +3,6 @@ import PotFactoryAbiJson from "../abis/PotFactory.json";
 import TraderRegistryAbiJson from "../abis/TraderRegistry.json";
 import EpochControllerAbiJson from "../abis/EpochController.json";
 import PlatformGovernanceAbiJson from "../abis/PlatformGovernance.json";
-import MetadataStoreAbiJson from "../abis/MetadataStore.json";
 import { ADDRESSES, TUSDC_DECIMALS } from "./addresses";
 import { parseUnits } from "viem";
 
@@ -13,7 +12,6 @@ export const PotFactoryAbi = PotFactoryAbiJson as unknown as typeof PotFactoryAb
 export const TraderRegistryAbi = TraderRegistryAbiJson as unknown as typeof TraderRegistryAbiJson;
 export const EpochControllerAbi = EpochControllerAbiJson as unknown as typeof EpochControllerAbiJson;
 export const PlatformGovernanceAbi = PlatformGovernanceAbiJson as unknown as typeof PlatformGovernanceAbiJson;
-export const MetadataStoreAbi = MetadataStoreAbiJson as unknown as typeof MetadataStoreAbiJson;
 
 // Minimal ERC20 ABI for tUSDC approve / balanceOf / allowance
 export const ERC20Abi = [

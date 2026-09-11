@@ -94,7 +94,9 @@ async function tick() {
     }
   }
 
-  // After settling, create next epoch if the latest one is Settled
+  // Ensure there is always an upcoming epoch scheduled. If the latest epoch is
+  // not Upcoming (it's Live/Settling/Settled), create the next one — it will be
+  // auto-scheduled to start after the current epoch ends (+ buffer).
   const latest = await publicClient.readContract({
     address: epochAddress,
     abi: EpochControllerAbi,
@@ -102,7 +104,7 @@ async function tick() {
     args: [count - 1n],
   });
 
-  if (latest.status === EpochStatus.Settled) {
+  if (latest.status !== EpochStatus.Upcoming) {
     await createEpoch(0n); // 0 = auto-calculate startsAt
   }
 }
