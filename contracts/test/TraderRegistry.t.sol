@@ -11,17 +11,18 @@ contract TraderRegistryTest is Test {
     address trader1 = makeAddr("trader1");
     address trader2 = makeAddr("trader2");
 
+    string constant JSON = '{"name":"Nova","handle":"nova","bio":"trader"}';
+
     function setUp() public {
         registry = new TraderRegistry(owner);
     }
 
     function test_registerTrader() public {
-        bytes32 cid = keccak256("QmTestCID123");
         vm.prank(trader1);
-        registry.registerTrader(cid, trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         TraderRegistry.TraderProfile memory profile = registry.getTrader(trader1);
-        assertEq(profile.metadataCID, cid);
+        assertEq(profile.metadata, JSON);
         assertEq(profile.payoutAddress, trader1);
         assertTrue(profile.traderType == TraderRegistry.TraderType.Human);
         assertTrue(profile.active);
@@ -30,27 +31,27 @@ contract TraderRegistryTest is Test {
 
     function test_registerTrader_cannotDoubleRegister() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         vm.prank(trader1);
         vm.expectRevert(TraderRegistry.AlreadyRegistered.selector);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
     }
 
     function test_updateMetadata() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
-        bytes32 newCid = keccak256("QmNewCID");
+        string memory newJson = '{"name":"Updated","handle":"nova2"}';
         vm.prank(trader1);
-        registry.updateMetadata(newCid);
+        registry.updateMetadata(newJson);
 
-        assertEq(registry.getTrader(trader1).metadataCID, newCid);
+        assertEq(registry.getTrader(trader1).metadata, newJson);
     }
 
     function test_setVerified() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         registry.setVerified(trader1, true);
         assertTrue(registry.getTrader(trader1).verified);
@@ -58,7 +59,7 @@ contract TraderRegistryTest is Test {
 
     function test_deactivate() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         registry.deactivate(trader1);
         assertFalse(registry.getTrader(trader1).active);
@@ -66,7 +67,7 @@ contract TraderRegistryTest is Test {
 
     function test_incrementPotCount() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         registry.incrementPotCount(trader1);
         registry.incrementPotCount(trader1);
@@ -75,10 +76,10 @@ contract TraderRegistryTest is Test {
 
     function test_getAllTraders() public {
         vm.prank(trader1);
-        registry.registerTrader(bytes32(0), trader1, TraderRegistry.TraderType.Human);
+        registry.registerTrader(JSON, trader1, TraderRegistry.TraderType.Human);
 
         vm.prank(trader2);
-        registry.registerTrader(bytes32(0), trader2, TraderRegistry.TraderType.AI);
+        registry.registerTrader(JSON, trader2, TraderRegistry.TraderType.AI);
 
         address[] memory traders = registry.getAllTraders();
         assertEq(traders.length, 2);

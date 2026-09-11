@@ -331,6 +331,27 @@ export function useVaultBalanceOf(vaultAddress: `0x${string}` | undefined, userA
   });
 }
 
+/** Read total LP token supply in a PotVault. */
+export function useVaultTotalSupply(vaultAddress: `0x${string}` | undefined) {
+  return useReadContract({
+    address: vaultAddress,
+    abi: PotVaultAbi,
+    functionName: "totalSupply",
+    query: { enabled: !!vaultAddress },
+  });
+}
+
+/** Read a user's tUSDC token balance via ERC20 balanceOf. */
+export function useTusdcBalance(userAddress: `0x${string}` | undefined) {
+  return useReadContract({
+    address: TUSDC_ADDRESS,
+    abi: ERC20Abi,
+    functionName: "balanceOf",
+    args: userAddress ? [userAddress] : undefined,
+    query: { enabled: !!userAddress },
+  });
+}
+
 /** Read the vault's claimable trader fees. */
 export function useVaultTraderFees(vaultAddress: `0x${string}` | undefined) {
   return useReadContract({

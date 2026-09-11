@@ -5,17 +5,17 @@ import {ReentrancyGuard} from "solmate/utils/ReentrancyGuard.sol";
 
 /// @title TraderRegistry
 /// @notice On-chain registry for trader profiles and social relationships.
-/// @dev Stores IPFS CIDs for metadata, tracks follows, and manages
-///      verification status. All profile data (name, bio, avatar) lives
-///      on IPFS; only the CID and key flags are on-chain.
+/// @dev Stores JSON metadata directly on-chain (no IPFS). Tracks follows,
+///      and manages verification status. All profile data (name, bio,
+///      avatar, handle, tags) lives in a JSON string on-chain.
 contract TraderRegistry is ReentrancyGuard {
     /* ──────────────────────────── types ───────────────────────────────── */
 
     enum TraderType { Human, AI }
 
     struct TraderProfile {
-        bytes32 metadataCID;      // IPFS hash for name, bio, avatar, etc.
-        address payoutAddress;    // Where trading fees are sent
+        string metadata;         // JSON string: name, handle, bio, avatar, tags
+        address payoutAddress;   // Where trading fees are sent
         TraderType traderType;
         bool verified;
         bool active;
@@ -39,11 +39,11 @@ contract TraderRegistry is ReentrancyGuard {
 
     event TraderRegistered(
         address indexed trader,
-        bytes32 metadataCID,
+        string metadata,
         address payoutAddress,
         TraderType traderType
     );
-    event TraderUpdated(address indexed trader, bytes32 metadataCID);
+    event TraderUpdated(address indexed trader, string metadata);
     event TraderVerified(address indexed trader, bool verified);
     event TraderDeactivated(address indexed trader);
     event OwnerSet(address indexed newOwner);
@@ -79,8 +79,9 @@ contract TraderRegistry is ReentrancyGuard {
     /* ──────────────────────────── registration ────────────────────────── */
 
     /// @notice Register as a trader. Caller becomes the trader.
+    /// @param metadata JSON string: {"name":"...","handle":"...","bio":"...","avatarUrl":"...","country":"...","tags":[...]}
     function registerTrader(
-        bytes32 metadataCID,
+        string calldata metadata,
         address payoutAddress,
         TraderType traderType
     ) external {
@@ -88,7 +89,7 @@ contract TraderRegistry is ReentrancyGuard {
         if (payoutAddress == address(0)) revert ZeroAddress();
 
         traders[msg.sender] = TraderProfile({
-            metadataCID: metadataCID,
+            metadata: metadata,
             payoutAddress: payoutAddress,
             traderType: traderType,
             verified: false,
@@ -101,14 +102,14 @@ contract TraderRegistry is ReentrancyGuard {
         traderList.push(msg.sender);
         traderCount++;
 
-        emit TraderRegistered(msg.sender, metadataCID, payoutAddress, traderType);
+        emit TraderRegistered(msg.sender, metadata, payoutAddress, traderType);
     }
 
-    /// @notice Update your metadata CID.
-    function updateMetadata(bytes32 metadataCID) external {
+    /// @notice Update your metadata JSON string.
+    function updateMetadata(string calldata metadata) external {
         if (traders[msg.sender].registeredAt == 0) revert NotRegistered();
-        traders[msg.sender].metadataCID = metadataCID;
-        emit TraderUpdated(msg.sender, metadataCID);
+        traders[msg.sender].metadata = metadata;
+        emit TraderUpdated(msg.sender, metadata);
     }
 
     /// @notice Update your payout address.

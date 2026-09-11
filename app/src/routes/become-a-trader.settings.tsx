@@ -1,6 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useRef } from "react";
-import { ArrowLeft, Bot, Save, UserCircle2, Camera, Loader2 } from "lucide-react";
+import { ArrowLeft, Bot, Save, UserCircle2, Camera } from "lucide-react";
 import TopBar from "@/layouts/TopBar";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useCreateTrader, useUpdateTrader, useMyTraderProfile, useUploadImage } from "@/lib/queries";
+import { useMyTraderProfile, useRegisterTraderOnChain, useUpdateTraderMetadata, buildTraderMetadata } from "@/lib/queries";
 
 const COUNTRIES = [
   "Argentina",
@@ -66,10 +66,9 @@ export const Route = createFileRoute("/become-a-trader/settings")({
 
 function TraderSettingsPage() {
   const navigate = useNavigate();
-  const { data: myTrader, isLoading: meLoading } = useMyTraderProfile();
-  const createTrader = useCreateTrader();
-  const updateTrader = useUpdateTrader();
-  const uploadImage = useUploadImage();
+  const { data: myTrader, isLoading: meLoading, onChainExists } = useMyTraderProfile();
+  const registerOnChain = useRegisterTraderOnChain();
+  const updateMetadata = useUpdateTraderMetadata();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [name, setName] = useState("");
@@ -121,16 +120,17 @@ function TraderSettingsPage() {
       return;
     }
 
-    uploadImage.mutate(file, {
-      onSuccess: (data) => {
-        setAvatarUrl(data.url);
-        toast.success("Image uploaded");
-      },
-      onError: (err: Error) => toast.error(err?.message ?? "Upload failed"),
-    });
+    // Avatar is stored on-chain as a URL string in the JSON metadata.
+    // For now, paste a hosted URL directly — no backend upload.
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarUrl(String(reader.result));
+      toast.success("Image selected");
+    };
+    reader.readAsDataURL(file);
   };
 
-  const save = () => {
+  const save = async () => {
     if (!name.trim()) {
       toast.error("Display name is required");
       return;
@@ -148,13 +148,14 @@ function TraderSettingsPage() {
       return;
     }
 
-    const base = {
+    const metadata = buildTraderMetadata({
       name: name.trim(),
+      handle: cleanHandle,
       avatarUrl: avatarUrl || undefined,
       bio: bio.trim(),
       country,
       tags: previewTags.slice(0, 5),
-    };
+    });
 
     const finish = (message: string) => {
       toast.success(message, {
@@ -163,33 +164,26 @@ function TraderSettingsPage() {
       navigate({ to: "/studio" });
     };
 
-    if (editing) {
-      updateTrader.mutate(base, {
-        onSuccess: () => finish("Profile updated"),
-        onError: (err: Error) => toast.error(err?.message ?? "Update failed"),
-      });
-      return;
+    try {
+      if (onChainExists) {
+        // Update the on-chain metadata JSON string
+        await updateMetadata.updateMetadata(metadata);
+        finish("Profile updated");
+      } else {
+        // Register on-chain with the JSON metadata
+        await registerOnChain.register({ metadata, traderType });
+        finish("Profile created");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      // Subgraph may lag — treat AlreadyRegistered as success
+      if (msg.includes("AlreadyRegistered") || msg.toLowerCase().includes("already registered")) {
+        await updateMetadata.updateMetadata(metadata);
+        finish("Profile updated");
+      } else {
+        toast.error(msg || "Failed to save trader profile");
+      }
     }
-
-    createTrader.mutate(
-      {
-        ...base,
-        handle: cleanHandle,
-        traderType,
-        aiConfig:
-          traderType === "ai"
-            ? {
-                model: aiModel || "GPT-4o",
-                skills: previewAiSkills.slice(0, 8),
-                description: aiDescription || bio.trim(),
-              }
-            : undefined,
-      },
-      {
-        onSuccess: () => finish("Profile created"),
-        onError: (err: Error) => toast.error(err?.message ?? "Create failed"),
-      },
-    );
   };
 
   return (
@@ -310,12 +304,9 @@ function TraderSettingsPage() {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadImage.isPending}
                   className="relative flex h-20 w-20 items-center justify-center overflow-hidden rounded-full border-2 border-dashed border-border hover:border-primary/50 transition-colors"
                 >
-                  {uploadImage.isPending ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  ) : avatarUrl ? (
+                  {avatarUrl ? (
                     <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
                   ) : (
                     <Camera className="h-6 w-6 text-muted-foreground" />
@@ -325,13 +316,12 @@ function TraderSettingsPage() {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadImage.isPending}
                     className="text-sm font-medium text-primary hover:underline"
                   >
                     {avatarUrl ? "Change image" : "Upload image"}
                   </button>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    JPG, PNG or GIF · max 5MB
+                    JPG, PNG or GIF · max 5MB (stored as data URL on-chain)
                   </p>
                 </div>
               </div>
@@ -453,11 +443,11 @@ function TraderSettingsPage() {
 
             <button
               type="submit"
-              disabled={createTrader.isPending || updateTrader.isPending || meLoading}
+              disabled={registerOnChain.isPending || updateMetadata.isPending || meLoading}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3 text-base font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none disabled:opacity-50 sm:w-auto sm:px-8"
             >
               <Save className="h-4 w-4" />
-              {createTrader.isPending || updateTrader.isPending
+              {registerOnChain.isPending || updateMetadata.isPending
                 ? "Saving…"
                 : editing
                   ? "Save changes"

@@ -98,8 +98,6 @@ async function deployContract(walletClient, publicClient, artifact, args, label)
 
 function writeSubgraphYaml(deployed) {
   const template = `specVersion: 0.0.5
-features:
-  - templateDataSources
 schema:
   file: ./schema.graphql
 templates:
@@ -193,9 +191,9 @@ dataSources:
         - name: TraderRegistry
           file: ./abis/TraderRegistry.json
       eventHandlers:
-        - event: TraderRegistered(indexed address,bytes32,address,uint8)
+        - event: TraderRegistered(indexed address,string,address,uint8)
           handler: handleTraderRegistered
-        - event: TraderUpdated(indexed address,bytes32)
+        - event: TraderUpdated(indexed address,string)
           handler: handleTraderUpdated
         - event: TraderVerified(indexed address,bool)
           handler: handleTraderVerified
@@ -224,27 +222,6 @@ dataSources:
       eventHandlers:
         - event: PotDeployed(indexed address,indexed uint256,indexed address,uint256,uint256)
           handler: handlePotDeployed
-
-  - kind: ethereum/contract
-    name: MetadataStore
-    network: somnia-testnet
-    source:
-      address: "${deployed.meta.address}"
-      abi: MetadataStore
-      startBlock: ${deployed.meta.block}
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      file: ./src/metadata-store.ts
-      entities:
-        - MetadataUpdate
-      abis:
-        - name: MetadataStore
-          file: ./abis/MetadataStore.json
-      eventHandlers:
-        - event: MetadataSet(indexed uint8,indexed bytes32,bytes32,uint256)
-          handler: handleMetadataSet
 
   - kind: ethereum/contract
     name: PlatformGovernance
@@ -334,14 +311,8 @@ async function main() {
   deployed.traderReg = await deployContract(walletClient, publicClient, traderRegArtifact,
     [deployer], "TraderRegistry");
 
-  // ── Phase 4: MetadataStore ───────────────────────────────────────────────
-  section("PHASE 4: Deploy MetadataStore");
-  const metaArtifact = loadArtifact("MetadataStore");
-  deployed.meta = await deployContract(walletClient, publicClient, metaArtifact,
-    [deployer], "MetadataStore");
-
-  // ── Phase 5: PotFactory ──────────────────────────────────────────────────
-  section("PHASE 5: Deploy PotFactory");
+  // ── Phase 4: PotFactory ──────────────────────────────────────────────────
+  section("PHASE 4: Deploy PotFactory");
   const factoryArtifact = loadArtifact("PotFactory");
   deployed.factory = await deployContract(walletClient, publicClient, factoryArtifact,
     [TUSDC, OUTCOME_NFT, SETTLEMENT, deployed.traderReg.address, deployer], "PotFactory");
@@ -355,8 +326,6 @@ async function main() {
     epochBlock: Number(deployed.epoch.block),
     traderReg: deployed.traderReg.address,
     traderRegBlock: Number(deployed.traderReg.block),
-    meta: deployed.meta.address,
-    metaBlock: Number(deployed.meta.block),
     factory: deployed.factory.address,
     factoryBlock: Number(deployed.factory.block),
   };
@@ -380,7 +349,6 @@ async function main() {
   PlatformGovernance:  ${deployed.gov.address}   (block ${deployed.gov.block})
   EpochController:     ${deployed.epoch.address}   (block ${deployed.epoch.block})
   TraderRegistry:      ${deployed.traderReg.address}   (block ${deployed.traderReg.block})
-  MetadataStore:       ${deployed.meta.address}   (block ${deployed.meta.block})
   PotFactory:          ${deployed.factory.address}   (block ${deployed.factory.block})
 
   DreamDEX (pre-deployed):

@@ -7,8 +7,6 @@ import {
 import { useState, createContext, useContext } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
-import { SiweSession } from "@/components/auth/SiweSession";
-import { useWsHub } from "@/lib/use-ws-hub";
 import TopBar from "@/layouts/TopBar";
 
 type SidebarContextType = {
@@ -97,12 +95,10 @@ export const Route = createRootRoute({
 });
 
 function RootComponent() {
-  useWsHub(["epochs", "*"]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <SidebarContext.Provider value={{ sidebarOpen, setSidebarOpen }}>
-      <SiweSession />
       <TopBar />
       <div className="pt-14">
         <Outlet />

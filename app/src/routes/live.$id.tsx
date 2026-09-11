@@ -1,9 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Bell, BellOff } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { useTrader, usePots, usePositions, useIsFollowing, useFollow, useUnfollow } from "@/lib/queries";
+import { useTrader, usePots, usePositions } from "@/lib/queries";
 import StreamLayout from "@/layouts/StreamLayout";
 import LiveSidebar from "@/components/sidebar/LiveSidebar";
 import StreamPlayer from "@/components/stream/StreamPlayer";
@@ -30,13 +26,9 @@ export const Route = createFileRoute("/live/$id")({
 function LivePage() {
   const { id } = Route.useParams();
   const { data: trader, isLoading, error } = useTrader(id);
-  const [notify, setNotify] = useState(false);
 
   const { data: pots = [] } = usePots({ traderId: id });
   const pot = pots[0] ?? null;
-  const { data: followingData } = useIsFollowing(id);
-  const followMutation = useFollow(id);
-  const unfollowMutation = useUnfollow(id);
 
   const room = trader?.handle
     ? `stream-${trader.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}`
@@ -46,16 +38,7 @@ function LivePage() {
   const { positions, pnl } = useStreamOverlay(pot?.id ?? "", id);
   const { data: rawPositions = [] } = usePositions(pot?.id ?? "");
 
-  const isFollowing = followingData?.following ?? false;
   const isLive = trader?.isLive ?? false;
-
-  const handleFollow = () => {
-    if (isFollowing) {
-      unfollowMutation.mutate();
-    } else {
-      followMutation.mutate();
-    }
-  };
 
   if (isLoading) {
     return (
@@ -99,8 +82,6 @@ function LivePage() {
       <StreamInfo
         trader={trader}
         viewerCount={viewerData?.count ?? 0}
-        onFollow={handleFollow}
-        isFollowing={isLive}
       />
 
       {/* Stream Controls (for own stream) */}

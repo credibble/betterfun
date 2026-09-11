@@ -92,9 +92,9 @@ dataSources:
         - name: TraderRegistry
           file: ./abis/TraderRegistry.json
       eventHandlers:
-        - event: TraderRegistered(indexed address,bytes32,address,uint8)
+        - event: TraderRegistered(indexed address,string,address,uint8)
           handler: handleTraderRegistered
-        - event: TraderUpdated(indexed address,bytes32)
+        - event: TraderUpdated(indexed address,string)
           handler: handleTraderUpdated
         - event: TraderVerified(indexed address,bool)
           handler: handleTraderVerified
@@ -123,27 +123,6 @@ dataSources:
       eventHandlers:
         - event: PotDeployed(indexed address,indexed uint256,indexed address,uint256,uint256)
           handler: handlePotDeployed
-
-  - kind: ethereum/contract
-    name: MetadataStore
-    network: somnia-testnet
-    source:
-      address: "0x4cd40a99e636d2c08b48305a9da29d187712ed78"
-      abi: MetadataStore
-      startBlock: 485577252
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      file: ./src/metadata-store.ts
-      entities:
-        - MetadataUpdate
-      abis:
-        - name: MetadataStore
-          file: ./abis/MetadataStore.json
-      eventHandlers:
-        - event: MetadataSet(indexed uint8,indexed bytes32,bytes32,uint256)
-          handler: handleMetadataSet
 
   - kind: ethereum/contract
     name: PlatformGovernance

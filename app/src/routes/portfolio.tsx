@@ -7,9 +7,10 @@ import {
 } from "lucide-react";
 import TopBar from "@/layouts/TopBar";
 import { B3TR } from "@/components/Token";
-import { useMe, usePots, useEpochs } from "@/lib/queries";
+import { usePots, useEpochs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useMemo, type ComponentType, type ReactNode } from "react";
+import { useAccount } from "wagmi";
 
 export const Route = createFileRoute("/portfolio")({
   head: () => ({
@@ -26,12 +27,12 @@ export const Route = createFileRoute("/portfolio")({
 });
 
 function PortfolioPage() {
-  const { data: user } = useMe();
+  const { address } = useAccount();
   const { data: epochs } = useEpochs();
   const activeEpoch = epochs?.find((e) => e.status === "live" || e.status === "upcoming");
   const { data: pots = [] } = usePots(activeEpoch ? { epochId: activeEpoch.id } : undefined);
 
-  const connected = !!user;
+  const connected = !!address;
   const myPots = Array.isArray(pots) ? pots : [];
   const totalInvested = myPots.reduce((sum: number, p) => sum + (p.nav ?? 0), 0);
   const totalNav = myPots.reduce((sum: number, p) => sum + (p.nav ?? 0), 0);

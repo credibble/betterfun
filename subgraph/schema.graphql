@@ -16,7 +16,7 @@ enum EpochState {
 
 type Trader @entity(immutable: false) {
   id: Bytes! # address
-  metadataCID: Bytes!
+  metadata: String! # JSON string: name, handle, bio, avatarUrl, country, tags
   payoutAddress: Bytes!
   traderType: TraderType!
   verified: Boolean!
@@ -111,22 +111,6 @@ type FeeClaim @entity(immutable: true) {
   amount: BigInt!
   isProtocol: Boolean!
   timestamp: BigInt!
-}
-
-type MetadataUpdate @entity(immutable: true) {
-  id: ID! # txLogIndex
-  entityType: EntityType!
-  entityKey: Bytes!
-  cid: Bytes!
-  version: BigInt!
-  timestamp: BigInt!
-}
-
-enum EntityType {
-  TRADER
-  POT
-  EPOCH
-  PLATFORM
 }
 
 type PlatformConfig @entity(immutable: false) {

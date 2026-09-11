@@ -1,4 +1,3 @@
-import { useTradeSignals } from "./use-trade-signals";
 import { usePositions } from "@/lib/queries";
 
 type OverlayPosition = {
@@ -10,8 +9,7 @@ type OverlayPosition = {
 };
 
 export function useStreamOverlay(potId: string, traderId: string) {
-  const { signals, latest } = useTradeSignals(potId);
-  const { data: rawPositions = [] } = usePositions(traderId);
+  const { data: rawPositions = [] } = usePositions(potId);
 
   const positions: OverlayPosition[] = rawPositions.map((p) => ({
     marketId: p.marketId,
@@ -23,5 +21,5 @@ export function useStreamOverlay(potId: string, traderId: string) {
 
   const pnl = 0;
 
-  return { positions, pnl, latest, signals };
+  return { positions, pnl };
 }

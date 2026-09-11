@@ -1,34 +1,8 @@
 services:
   # ── Infrastructure ─────────────────────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_USER: betterfun
-      POSTGRES_PASSWORD: betterfun_dev
-      POSTGRES_DB: betterfun
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U betterfun"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6380:6379"
-    volumes:
-      - redisdata:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+  # Note: postgres/redis were used by the old backend (auth/traders/comments).
+  # The backend is now on-chain + subgraph only (Keeper + LiveKit), so these
+  # are retained solely for graph-node.
 
   # ── Graph Node (subgraph) ──────────────────────────────────────────────────
   graph-node-postgres:
@@ -91,17 +65,7 @@ services:
       - "3001:3001"
     env_file:
       - ./backend/.env.docker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://betterfun:betterfun_dev@postgres:5432/betterfun
-      REDIS_URL: redis://redis:6379
 
 volumes:
-  pgdata:
-  redisdata:
   gn-pgdata:
   ipfs-data:

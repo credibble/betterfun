@@ -1,24 +1,28 @@
 import { Router } from "express";
-import { requireAuth, type AuthenticatedRequest } from "../auth/auth.middleware.js";
+import { isAddress } from "viem";
 import { createLiveKitToken, createRoom, listParticipants, createStreamIngress } from "./livekit.service.js";
 import { env } from "../../config/env.js";
 
 export function buildLiveKitRoutes() {
   const router = Router();
 
-  // POST /livekit/token — get a LiveKit join token
-  router.post("/token", requireAuth, async (req: AuthenticatedRequest, res) => {
+  // POST /livekit/token — get a LiveKit join token (identity = wallet address)
+  router.post("/token", async (req, res) => {
     try {
-      const { room } = req.body;
+      const { room, address } = req.body;
       if (!room || typeof room !== "string") {
         res.status(400).json({ error: "room required" });
         return;
       }
+      if (!address || typeof address !== "string" || !isAddress(address)) {
+        res.status(400).json({ error: "valid wallet address required" });
+        return;
+      }
 
       const token = await createLiveKitToken({
-        identity: req.claims!.sub,
+        identity: address,
         room,
-        name: req.claims!.address,
+        name: address,
       });
 
       if (!token) {
@@ -34,7 +38,7 @@ export function buildLiveKitRoutes() {
   });
 
   // POST /livekit/room — create a room
-  router.post("/room", requireAuth, async (req: AuthenticatedRequest, res) => {
+  router.post("/room", async (req, res) => {
     try {
       const { name } = req.body;
       if (!name || typeof name !== "string") {
@@ -52,18 +56,22 @@ export function buildLiveKitRoutes() {
   // POST /livekit/stream-setup — get RTMP ingest URL + stream key for publishing
   // Uses a real LiveKit Ingress (RTMP → room). The returned url/streamKey are
   // exactly what OBS/FFmpeg need.
-  router.post("/stream-setup", requireAuth, async (req: AuthenticatedRequest, res) => {
+  router.post("/stream-setup", async (req, res) => {
     try {
-      const { room } = req.body;
+      const { room, address } = req.body;
       if (!room || typeof room !== "string") {
         res.status(400).json({ error: "room required" });
+        return;
+      }
+      if (!address || typeof address !== "string" || !isAddress(address)) {
+        res.status(400).json({ error: "valid wallet address required" });
         return;
       }
 
       const ingress = await createStreamIngress({
         room,
-        identity: `streamer-${req.claims!.sub}`,
-        name: req.claims!.address,
+        identity: `streamer-${address}`,
+        name: address,
       });
 
       if (!ingress) {

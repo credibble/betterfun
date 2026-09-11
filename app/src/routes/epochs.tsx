@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Users, PlayCircle } from "lucide-react";
+import { ArrowRight, Users } from "lucide-react";
 import TopBar from "@/layouts/TopBar";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
-import { useEpochs, useActiveEpoch, usePots, useDemoSeed, useDemoFastForward } from "@/lib/queries";
-import { toast } from "sonner";
+import { useEpochs, useActiveEpoch, usePots } from "@/lib/queries";
 
 type EpochView = {
   id: string;
@@ -34,8 +33,6 @@ function EpochsPage() {
   const { data: epochsRaw } = useEpochs();
   const { data: activeEpoch } = useActiveEpoch();
   const epochsData = Array.isArray(epochsRaw) ? epochsRaw : [];
-  const seed = useDemoSeed();
-  const fastForward = useDemoFastForward();
 
   const epochs: EpochView[] = epochsData.map((e) => ({
     id: e.id,
@@ -141,49 +138,6 @@ function EpochsPage() {
         </div>
 
         {selected && <SelectedEpochPanel epoch={selected} />}
-
-        {import.meta.env.DEV && (
-          <div className="mt-8 rounded-xl border border-dashed border-border bg-card/50 p-5">
-            <h2 className="flex items-center gap-1.5 text-sm font-bold">
-              <PlayCircle className="h-4 w-4 text-muted-foreground" /> Demo controls (dev only)
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Seed an epoch or fast-forward the selected epoch through its lifecycle to exercise
-              the settle flow.
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() =>
-                  seed.mutate(undefined, {
-                    onSuccess: () => toast.success("Demo epoch seeded"),
-                    onError: (err: Error) => toast.error(err?.message ?? "Seed failed"),
-                  })
-                }
-                disabled={seed.isPending}
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-secondary/60"
-              >
-                {seed.isPending ? "Seeding…" : "Seed demo epoch"}
-              </button>
-              {selected && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    fastForward.mutate(selected.id, {
-                      onSuccess: (res) =>
-                        toast.success(`Fast-forwarded → ${res.action} (${res.status})`),
-                      onError: (err: Error) => toast.error(err?.message ?? "Fast-forward failed"),
-                    })
-                  }
-                  disabled={fastForward.isPending}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold hover:bg-secondary/60"
-                >
-                  {fastForward.isPending ? "Advancing…" : `Fast-forward epoch #${selected.number}`}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </main>
     </div>
   );

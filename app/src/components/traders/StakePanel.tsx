@@ -2,14 +2,10 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
-import { useReadContract } from "wagmi";
 import { TrendingUp, Lock, Wallet } from "lucide-react";
-import { parseUnits, formatUnits } from "viem";
 import { ActionPairTabs } from "@/components/ActionPairTabs";
-import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
-import { useVaultDeposit, useVaultWithdraw, formatNav, formatSharePrice } from "@/lib/hooks/use-vault-actions";
-import { ADDRESSES } from "@/lib/contracts";
-import { PotVaultAbi } from "@/lib/contracts";
+import { usePots, usePotShares, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
+import { useVaultDeposit, useVaultWithdraw, useVaultPricePerShare, useTusdcBalance, formatNav, formatSharePrice } from "@/lib/hooks/use-vault-actions";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 
 type Trader = { id: string; name: string };
@@ -49,14 +45,17 @@ export function StakePanel({
   const { data: potData } = usePot(potId ?? "");
   const pot = potProp ?? potData;
 
-  const { data: me } = useMe();
   const { data: shares } = usePotShares(pot?.id);
   const { data: payout } = usePayout(pot?.vault as `0x${string}` | undefined);
   const { data: epoch } = useEpoch(preferredEpochId ?? pot?.epochId ?? "");
 
-  const myShare = shares?.find((s) => me?.id && s.userId === me.id);
+  const myShare = shares?.find((s) => address && s.userId === address);
   const staked = myShare?.investedUsd ?? 0;
-  const claimable = myShare?.claimableUsd ?? 0;
+
+  // On-chain tUSDC balance + price per share
+  const { data: tusdcBalanceRaw } = useTusdcBalance(address);
+  const { data: pricePerShareRaw } = useVaultPricePerShare(pot?.vault as `0x${string}` | undefined);
+  const tusdcBalance = tusdcBalanceRaw != null ? Number(tusdcBalanceRaw) / 1e6 : 0;
 
   const [amount, setAmount] = useState(0);
   const [mode, setMode] = useState<"stake" | "unstake" | "claim">("stake");
@@ -69,16 +68,15 @@ export function StakePanel({
   const vaultNavUsd = pot?.nav ?? 0;
   const totalSupply = pot?.totalShares ?? 0;
 
-  // User's individual LP share balance (per-user, not in subgraph)
-  const { data: myVaultShares } = useReadContract({
-    address: (pot?.vault ?? ADDRESSES.POT_VAULT) as `0x${string}`,
-    abi: PotVaultAbi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    query: { enabled: !!address && !!pot?.vault },
-  });
-  const myVaultShareBalance = myVaultShares && typeof myVaultShares === "bigint" ? Number(formatUnits(myVaultShares, 18)) : 0;
-  const myVaultValue = myVaultShareBalance * (pot?.lpPrice ?? 1);
+  // User's individual LP share balance (per-user, from contract balanceOf)
+  const myVaultShareBalance = myShare?.shares ?? 0;
+  // Raw shares bigint for withdraw (from contract balanceOf)
+  const rawShares = myShare?.shares != null ? BigInt(Math.floor(myShare.shares * 1e18)) : 0n;
+  // Value from on-chain pricePerShare (18dp); fall back to subgraph lpPrice
+  const sharePrice = pricePerShareRaw != null ? Number(pricePerShareRaw) / 1e18 : (pot?.lpPrice ?? 1);
+  const myVaultValue = myVaultShareBalance * sharePrice;
+  // Claimable = LP value once the epoch is settled
+  const claimable = epoch?.status === "settled" ? myVaultValue : 0;
 
   const hasVault = !!pot?.vault && pot.vault !== "0x0000000000000000000000000000000000000000";
 
@@ -128,7 +126,7 @@ export function StakePanel({
     }
     const sharesToWithdraw = amount > 0
       ? BigInt(Math.floor(amount * 1e18))
-      : (typeof myVaultShares === "bigint" ? myVaultShares : 0n);
+      : rawShares;
     if (sharesToWithdraw <= 0n) {
       toast.error("Nothing to withdraw");
       return;
@@ -279,7 +277,10 @@ export function StakePanel({
         <>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Amount (tUSDC)</span>
-            <span className="num text-sm text-foreground">{formatUsd(amount)}</span>
+            <span className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Balance {formatUsd(tusdcBalance)}</span>
+              <span className="num text-sm text-foreground">{formatUsd(amount)}</span>
+            </span>
           </div>
 
           <div className="mb-3">
@@ -299,7 +300,7 @@ export function StakePanel({
               />
               <button
                 type="button"
-                onClick={() => setAmount(mode === "stake" ? vaultNavUsd : myVaultShareBalance)}
+                onClick={() => setAmount(mode === "stake" ? tusdcBalance : myVaultShareBalance)}
                 className="shrink-0 rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary hover:bg-primary/25"
               >
                 Max

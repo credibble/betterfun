@@ -1,16 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check, Zap } from "lucide-react";
 import { useState, useMemo } from "react";
+import { useAccount } from "wagmi";
 import TopBar from "@/layouts/TopBar";
 import { StakePanel } from "@/components/traders/StakePanel";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
-import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe, useTraders, usePots } from "@/lib/queries";
+import { usePot, useTrader, useEpoch, usePayout, usePotShares, useTraders, usePots } from "@/lib/queries";
 import { formatNav, formatSharePrice } from "@/lib/hooks/use-vault-actions";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/clipboard";
-import { useWsHub } from "@/lib/use-ws-hub";
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -62,15 +62,11 @@ function PotDetailPage() {
   const pot = isUuid ? potById : potByHandle;
   const isLoading = isUuid ? potByIdLoading : tradersLoading || potsLoading;
 
-  // Subscribe to pot updates via WS hub
-  const potChannels = useMemo(() => pot ? [`pot:${pot.id}`] : [], [pot?.id]);
-  useWsHub(potChannels);
-
   const { data: epoch } = useEpoch(pot?.epochId ?? "");
   const { data: trader } = useTrader(pot?.traderId ?? "");
   const { data: payout } = usePayout(pot?.id ?? "");
   const { data: shares } = usePotShares(pot?.id ?? "");
-  const { data: me } = useMe();
+  const { address } = useAccount();
 
   // On-chain vault data from subgraph (via usePot)
   const vaultNavUsd = pot?.nav ?? 0;
@@ -82,7 +78,7 @@ function PotDetailPage() {
   const name = trader?.name ?? handleTrader?.name ?? "Trader";
   const hue = seedHue(pot?.traderId || pot?.id || "");
 
-  const myShare = shares?.find((s) => me?.id && s.userId === me.id);
+  const myShare = shares?.find((s) => address && s.userId === address);
 
   if (isLoading) {
     return (
@@ -188,7 +184,7 @@ function PotDetailPage() {
                 </button>
               </div>
 
-              {me && trader && me.id === trader.id && epoch?.status === "live" && (
+              {address && trader && address.toLowerCase() === trader.id.toLowerCase() && epoch?.status === "live" && (
                 <Link
                   to="/studio"
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
@@ -250,8 +246,8 @@ function PotDetailPage() {
                     <SettlementRow label="Share price" value={`$${payout.sharePrice.toFixed(4)}`} bold />
                     <SettlementRow label="Total NAV" value={formatUsd(payout.nav)} />
                     <SettlementRow label="Total LP shares" value={`${(payout.totalShares / 1e18).toFixed(4)}`} />
-                    {myShare && (
-                      <SettlementRow label="Your claimable share" value={formatUsd(myShare.claimableUsd)} accent />
+                    {myShare && payout && (
+                      <SettlementRow label="Your claimable share" value={formatUsd(myShare.shares * payout.sharePrice)} accent />
                     )}
                     <p className="pt-1 text-xs text-muted-foreground">
                       Claim from the sidebar. On a loss the trader takes nothing and LPs split

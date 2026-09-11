@@ -1,4 +1,4 @@
-import { Bytes, BigInt } from "@graphprotocol/graph-ts";
+import { BigInt } from "@graphprotocol/graph-ts";
 import {
   TraderRegistered,
   TraderUpdated,
@@ -9,7 +9,7 @@ import { Trader } from "../generated/schema";
 
 export function handleTraderRegistered(event: TraderRegistered): void {
   let trader = new Trader(event.params.trader);
-  trader.metadataCID = event.params.metadataCID;
+  trader.metadata = event.params.metadata;
   trader.payoutAddress = event.params.payoutAddress;
   trader.traderType = event.params.traderType == 0 ? "TRADER" : "ALGO";
   trader.verified = false;
@@ -23,7 +23,7 @@ export function handleTraderRegistered(event: TraderRegistered): void {
 export function handleTraderUpdated(event: TraderUpdated): void {
   let trader = Trader.load(event.params.trader);
   if (!trader) return;
-  trader.metadataCID = event.params.metadataCID;
+  trader.metadata = event.params.metadata;
   trader.updatedAt = event.block.timestamp;
   trader.save();
 }

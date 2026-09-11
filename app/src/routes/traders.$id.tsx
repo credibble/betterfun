@@ -3,10 +3,8 @@ import { useState } from "react";
 import {
   ArrowLeft,
   Radio,
-  UserPlus,
   Share2,
   Users,
-  UserCheck,
   Heart,
   Bell,
   BellOff,
@@ -26,9 +24,6 @@ import {
   useTrader,
   usePots,
   useEpochs,
-  useIsFollowing,
-  useFollow,
-  useUnfollow,
 } from "@/lib/queries";
 
 function copyText(text: string) {
@@ -71,28 +66,9 @@ function TraderProfile() {
   const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
 
-  const { data: followData } = useIsFollowing(id);
-  const followMutation = useFollow(id);
-  const unfollowMutation = useUnfollow(id);
-  const isFollowing = followData?.following ?? false;
-
   const room = t?.handle ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}` : "";
   const { data: viewerData } = useStreamViewers(room);
   const isLive = t?.isLive ?? false;
-
-  const onFollow = () => {
-    if (isFollowing) {
-      unfollowMutation.mutate(undefined, {
-        onSuccess: () => toast.success(`Unfollowed ${t?.name}`),
-        onError: () => toast.error("Failed to unfollow"),
-      });
-    } else {
-      followMutation.mutate(undefined, {
-        onSuccess: () => toast.success(`Following ${t?.name}`),
-        onError: () => toast.error("Failed to follow"),
-      });
-    }
-  };
 
   const onShare = async () => {
     copyText(window.location.href);
@@ -239,21 +215,6 @@ function TraderProfile() {
               </div>
               <p className="mt-4 text-sm text-foreground/90">{t.bio}</p>
               <div className="mt-4 flex items-center gap-2">
-                <button
-                  onClick={onFollow}
-                  disabled={followMutation.isPending || unfollowMutation.isPending}
-                  className="flex items-center gap-1.5 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground shadow-block-outline transition-all duration-150 hover:bg-secondary/60 active:translate-y-[3px] active:shadow-none disabled:opacity-50"
-                >
-                  {isFollowing ? (
-                    <>
-                      <UserCheck className="h-4 w-4" /> Following
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4" /> Follow
-                    </>
-                  )}
-                </button>
                 <button
                   onClick={onShare}
                   className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-secondary/60 hover:text-foreground"

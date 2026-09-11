@@ -166,7 +166,7 @@ export function usePayout(vaultAddress: string | undefined) {
         totalNo: Number((positionTotals as readonly [bigint, bigint])[1]) / 1e6,
         nav: Number(nav) / 1e6,
         totalShares: Number(totalSupply),
-        sharePrice: Number(totalSupply) > 0 ? Number(nav) / Number(totalSupply) : 1,
+        sharePrice: Number(totalSupply) > 0 ? (Number(nav) / 1e6) / (Number(totalSupply) / 1e18) : 1,
         status: "pending",
       }
     : undefined;

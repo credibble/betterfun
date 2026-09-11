@@ -1,114 +1,90 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useAccount } from "wagmi";
-import { useQuery } from "@tanstack/react-query";
-import { useQueryClient } from "@tanstack/react-query";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { TraderRegistryAbi, ADDRESSES } from "../contracts";
 import { getTraders, getTrader, type SubgraphTrader } from "../subgraph";
-import { api } from "../api-client";
 import type { TraderView } from "../types";
 
-function sgTraderToView(sg: SubgraphTrader, backend?: Record<string, unknown>): TraderView {
-  const be = backend ?? {};
+/** Parse the on-chain JSON metadata string stored in TraderRegistry. */
+export interface TraderMetadata {
+  name?: string;
+  handle?: string;
+  bio?: string;
+  avatarUrl?: string;
+  country?: string;
+  tags?: string[];
+}
+
+export function parseTraderMetadata(raw: string): TraderMetadata {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as TraderMetadata;
+    return {
+      name: typeof parsed.name === "string" ? parsed.name : undefined,
+      handle: typeof parsed.handle === "string" ? parsed.handle : undefined,
+      bio: typeof parsed.bio === "string" ? parsed.bio : undefined,
+      avatarUrl: typeof parsed.avatarUrl === "string" ? parsed.avatarUrl : undefined,
+      country: typeof parsed.country === "string" ? parsed.country : undefined,
+      tags: Array.isArray(parsed.tags) ? parsed.tags.filter((t) => typeof t === "string") : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function sgTraderToView(sg: SubgraphTrader): TraderView {
+  const meta = parseTraderMetadata(sg.metadata);
   return {
     id: sg.id,
     userId: sg.id,
     traderType: sg.traderType === "ALGO" ? "ai" : "human",
-    name: (be.name as string) ?? sg.id.slice(0, 10),
-    handle: (be.handle as string) ?? sg.id.slice(0, 8),
-    avatarUrl: (be.avatarUrl as string) ?? "",
-    bio: (be.bio as string) ?? "",
-    country: (be.country as string) ?? "",
-    tags: (be.tags as string[]) ?? [],
+    name: meta.name ?? sg.id.slice(0, 10),
+    handle: meta.handle ?? sg.id.slice(0, 8),
+    avatarUrl: meta.avatarUrl ?? "",
+    bio: meta.bio ?? "",
+    country: meta.country ?? "",
+    tags: meta.tags ?? [],
     verified: sg.verified,
     reputation: 0,
     pnl30: 0,
     winRate: 0,
     aum: 0,
-    isLive: (be.isLive as boolean) ?? false,
-    videoUrl: be.videoUrl as string | undefined,
+    isLive: false,
+    videoUrl: undefined,
     followers: 0,
     createdAt: sg.registeredAt,
     updatedAt: sg.updatedAt,
   };
 }
 
-// ── Subgraph + backend reads ──────────────────────────────────────────────────
+// ── Subgraph reads ──────────────────────────────────────────────────────────
 
 export function useTraders() {
-  const { data: sgTraders = [], isLoading: sgLoading, error: sgError } = useQuery<SubgraphTrader[]>({
+  const { data: sgTraders = [], isLoading, error } = useQuery<SubgraphTrader[]>({
     queryKey: ["subgraph", "traders"],
     queryFn: () => getTraders(),
     staleTime: 30_000,
   });
 
-  const { data: backendTraders = [], isLoading: beLoading } = useQuery<Record<string, unknown>[]>({
-    queryKey: ["backend-traders"],
-    queryFn: () => api<Record<string, unknown>[]>("/traders"),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const backendMap = new Map(
-    backendTraders.map((t) => [t.id, t])
-  );
-
-  const data = sgTraders.map((sg) => {
-    const be = backendMap.get(sg.id) ?? backendTraders.find((b) => (b.userId as string)?.toLowerCase() === sg.id.toLowerCase());
-    return sgTraderToView(sg, be);
-  });
-
-  return { data, isLoading: sgLoading || beLoading, error: sgError };
+  const data = sgTraders.map(sgTraderToView);
+  return { data, isLoading, error };
 }
 
 export function useTrader(id: string) {
-  const { data: sgTrader, isLoading: sgLoading, error: sgError } = useQuery<SubgraphTrader | null>({
+  const { data: sgTrader, isLoading, error } = useQuery<SubgraphTrader | null>({
     queryKey: ["subgraph", "trader", id],
     queryFn: () => getTrader(id),
     enabled: !!id,
     staleTime: 30_000,
   });
 
-  const { data: backendTrader, isLoading: beLoading } = useQuery<Record<string, unknown> | null>({
-    queryKey: ["backend-trader", id],
-    queryFn: () => api<Record<string, unknown>>(`/traders/${id}`),
-    enabled: !!id,
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const data = (() => {
-    if (!sgTrader && !backendTrader) return null;
-    if (sgTrader) return sgTraderToView(sgTrader, backendTrader ?? undefined);
-    const be = backendTrader!;
-    return {
-      id: (be.id as string) ?? id,
-      userId: (be.userId as string) ?? id,
-      traderType: (be.traderType as "human" | "ai") ?? "human",
-      name: (be.name as string) ?? id.slice(0, 10),
-      handle: (be.handle as string) ?? id.slice(0, 8),
-      avatarUrl: (be.avatarUrl as string) ?? "",
-      bio: (be.bio as string) ?? "",
-      country: (be.country as string) ?? "",
-      tags: (be.tags as string[]) ?? [],
-      verified: (be.verified as boolean) ?? false,
-      reputation: 0,
-      pnl30: 0,
-      winRate: 0,
-      aum: 0,
-      isLive: (be.isLive as boolean) ?? false,
-      videoUrl: be.videoUrl as string | undefined,
-      followers: 0,
-      createdAt: (be.createdAt as string) ?? "",
-      updatedAt: (be.updatedAt as string) ?? "",
-    } satisfies TraderView;
-  })();
-
-  return { data, isLoading: sgLoading || beLoading, error: sgError };
+  const data = sgTrader ? sgTraderToView(sgTrader) : null;
+  return { data, isLoading, error };
 }
 
 /**
- * Current user's trader profile — combines on-chain state + backend metadata.
+ * Current user's trader profile — on-chain TraderRegistry only.
+ * Exposes whether the trader exists on-chain (in TraderRegistry/subgraph).
  */
 export function useMyTrader() {
   const { address } = useAccount();
@@ -121,18 +97,11 @@ export function useMyTrader() {
     query: { enabled: !!address },
   });
 
-  const { data: backendProfile, isLoading: beLoading } = useQuery<Record<string, unknown>>({
-    queryKey: ["traders", "me"],
-    queryFn: () => api("/traders/me"),
-    retry: false,
-    staleTime: 60_000,
-  });
-
   const data = (() => {
-    if (!backendProfile) return null;
+    if (!address) return null;
 
     const oc = onChainProfile as unknown as {
-      metadataCID: string;
+      metadata: string;
       payoutAddress: string;
       traderType: number;
       verified: boolean;
@@ -142,37 +111,43 @@ export function useMyTrader() {
       totalAUM: bigint;
     } | undefined;
 
-    const be = backendProfile ?? {};
+    if (!oc || (oc.registeredAt ?? 0n) === 0n) return null;
+
+    const meta = parseTraderMetadata(oc.metadata);
 
     return {
-      id: (be.id as string) ?? address ?? "",
-      userId: (be.userId as string) ?? address ?? "",
-      traderType: (be.traderType as "human" | "ai") ?? (oc?.traderType === 1 ? "ai" : "human"),
-      name: (be.name as string) ?? "",
-      handle: (be.handle as string) ?? "",
-      avatarUrl: (be.avatarUrl as string) ?? "",
-      bio: (be.bio as string) ?? "",
-      country: (be.country as string) ?? "",
-      tags: (be.tags as string[]) ?? [],
-      verified: oc?.verified ?? (be.verified as boolean) ?? false,
+      id: address,
+      userId: address,
+      traderType: (oc.traderType === 1 ? "ai" : "human") as "human" | "ai",
+      name: meta.name ?? "",
+      handle: meta.handle ?? "",
+      avatarUrl: meta.avatarUrl ?? "",
+      bio: meta.bio ?? "",
+      country: meta.country ?? "",
+      tags: meta.tags ?? [],
+      verified: oc.verified,
       reputation: 0,
       pnl30: 0,
       winRate: 0,
-      aum: oc ? Number(oc.totalAUM) / 1e6 : 0,
-      isLive: (be.isLive as boolean) ?? false,
-      videoUrl: be.videoUrl as string | undefined,
+      aum: Number(oc.totalAUM) / 1e6,
+      isLive: false,
+      videoUrl: undefined,
       followers: 0,
-      createdAt: oc?.registeredAt ? String(oc.registeredAt) : ((be.createdAt as string) ?? ""),
-      updatedAt: (be.updatedAt as string) ?? "",
-    };
+      createdAt: String(oc.registeredAt),
+      updatedAt: "",
+    } satisfies TraderView;
   })();
 
-  return { data, isLoading: ocLoading || beLoading };
+  // Whether the wallet is registered on-chain (active profile in TraderRegistry)
+  const oc = onChainProfile as unknown as { active: boolean; registeredAt: bigint } | undefined;
+  const onChainExists = !!oc && (oc.active || (oc.registeredAt ?? 0n) > 0n);
+
+  return { data, isLoading: ocLoading, onChainExists };
 }
 
 /** Typed accessor for myTrader data. */
 export function useMyTraderProfile() {
-  const { data: raw, ...rest } = useMyTrader();
+  const { data: raw, onChainExists, ...rest } = useMyTrader();
   const data = raw
     ? {
         id: raw.id,
@@ -192,7 +167,7 @@ export function useMyTraderProfile() {
         aum: raw.aum,
       }
     : null;
-  return { data, ...rest };
+  return { data, onChainExists, ...rest };
 }
 
 // ── Contract reads ────────────────────────────────────────────────────────────
@@ -217,139 +192,80 @@ export function useTraderCount() {
 
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
+/** Serialize trader profile fields into the on-chain JSON metadata string. */
+export function buildTraderMetadata(input: {
+  name: string;
+  handle: string;
+  bio?: string;
+  country?: string;
+  tags?: string[];
+  avatarUrl?: string;
+}): string {
+  const meta: TraderMetadata = {
+    name: input.name,
+    handle: input.handle,
+    bio: input.bio,
+    country: input.country,
+    tags: input.tags,
+    avatarUrl: input.avatarUrl,
+  };
+  // Drop undefined fields to keep the stored JSON lean
+  const clean: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(meta)) {
+    if (v !== undefined) clean[k] = v;
+  }
+  return JSON.stringify(clean);
+}
+
 /**
- * Register a trader on-chain via TraderRegistry.registerTrader, then
- * create the backend profile and get a JWT.
+ * Register the connected wallet on-chain via TraderRegistry.registerTrader.
+ * Used when creating a trader that is not yet in the subgraph.
  */
-export function useCreateTrader() {
-  const { writeContractAsync } = useWriteContract();
+export function useRegisterTraderOnChain() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash });
   const { address } = useAccount();
-  const qc = useQueryClient();
 
-  return useMutation({
-    mutationFn: async (input: {
-      name: string;
-      handle: string;
-      traderType: "human" | "ai";
-      bio?: string;
-      country?: string;
-      tags?: string[];
-      aiConfig?: { model: string; skills: string[]; description: string };
-      payoutAddress?: `0x${string}`;
-    }) => {
-      // On-chain registration (metadataCID is placeholder — real metadata lives in backend)
-      const zeroBytes32 = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
-      await writeContractAsync({
-        address: ADDRESSES.TRADER_REGISTRY,
-        abi: TraderRegistryAbi,
-        functionName: "registerTrader",
-          args: [
-            zeroBytes32,
-            input.payoutAddress ?? address ?? "0x0000000000000000000000000000000000000001",
-            input.traderType === "ai" ? 1 : 0,
-          ],
-      });
+  const register = async (input: {
+    metadata: string;
+    traderType: "human" | "ai";
+    payoutAddress?: `0x${string}`;
+  }) => {
+    if (!address) throw new Error("Wallet not connected");
+    await writeContractAsync({
+      address: ADDRESSES.TRADER_REGISTRY,
+      abi: TraderRegistryAbi,
+      functionName: "registerTrader",
+      args: [
+        input.metadata,
+        input.payoutAddress ?? address,
+        input.traderType === "ai" ? 1 : 0,
+      ],
+    });
+  };
 
-      // Backend profile + JWT
-      const result = await api<{ trader: Record<string, unknown>; accessToken: string }>("/traders", {
-        method: "POST",
-        body: JSON.stringify(input),
-      });
-
-      return result;
-    },
-    onSuccess: (data) => {
-      localStorage.setItem("access_token", data.accessToken);
-      qc.setQueryData(["traders", "me"], data.trader);
-      qc.invalidateQueries({ queryKey: ["subgraph", "traders"] });
-      qc.invalidateQueries({ queryKey: ["backend-traders"] });
-    },
-  });
+  return { register, hash, isPending, receipt, error };
 }
 
-export function useUpdateTrader() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { name?: string; avatarUrl?: string; bio?: string; country?: string; tags?: string[] }) =>
-      api<Record<string, unknown>>("/traders/me", {
-        method: "PATCH",
-        body: JSON.stringify(input),
-      }),
-    onSuccess: (data) => {
-      qc.setQueryData(["traders", "me"], data);
-      qc.invalidateQueries({ queryKey: ["backend-traders"] });
-    },
-  });
+/**
+ * Update the trader's on-chain metadata JSON string via
+ * TraderRegistry.updateMetadata.
+ */
+export function useUpdateTraderMetadata() {
+  const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
+  const receipt = useWaitForTransactionReceipt({ hash });
+
+  const updateMetadata = async (metadata: string) => {
+    await writeContractAsync({
+      address: ADDRESSES.TRADER_REGISTRY,
+      abi: TraderRegistryAbi,
+      functionName: "updateMetadata",
+      args: [metadata],
+    });
+  };
+
+  return { updateMetadata, hash, isPending, receipt, error };
 }
-
-export function useSetLive() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (isLive: boolean) =>
-      api<Record<string, unknown>>("/traders/me/live", {
-        method: "PATCH",
-        body: JSON.stringify({ isLive }),
-      }),
-    onSuccess: (data) => {
-      qc.setQueryData(["traders", "me"], data);
-      qc.invalidateQueries({ queryKey: ["backend-traders"] });
-    },
-  });
-}
-
-// ── Follow / Unfollow (off-chain social — kept on backend) ───────────────────
-
-export function useIsFollowing(traderId: string) {
-  return useQuery<{ following: boolean }>({
-    queryKey: ["follow", traderId],
-    queryFn: () => api(`/traders/${traderId}/following`),
-    enabled: !!traderId,
-    retry: false,
-  });
-}
-
-export function useFollow(traderId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      api<{ following: boolean; followers: number }>(`/traders/${traderId}/follow`, {
-        method: "POST",
-      }),
-    onSuccess: (data) => {
-      qc.setQueryData(["follow", traderId], { following: data.following });
-      qc.invalidateQueries({ queryKey: ["backend-traders"] });
-    },
-  });
-}
-
-export function useUnfollow(traderId: string) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () =>
-      api<{ following: boolean; followers: number }>(`/traders/${traderId}/follow`, {
-        method: "DELETE",
-      }),
-    onSuccess: (data) => {
-      qc.setQueryData(["follow", traderId], { following: data.following });
-      qc.invalidateQueries({ queryKey: ["backend-traders"] });
-    },
-  });
-}
-
-// ── Upload ────────────────────────────────────────────────────────────────────
-
-export function useUploadImage() {
-  return useMutation({
-    mutationFn: async (file: File) => {
-      const { apiUpload } = await import("../api-client");
-      const formData = new FormData();
-      formData.append("file", file);
-      return apiUpload<{ url: string; publicId: string }>("/upload/image", formData);
-    },
-  });
-}
-
-// ── Contract write: update payout address ─────────────────────────────────────
 
 /**
  * Update the trader's on-chain payout address via TraderRegistry.updatePayoutAddress.

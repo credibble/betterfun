@@ -30,10 +30,8 @@ import {
   usePositions,
   useTrades,
   useMarkets,
-  useSetLive,
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
-import { useWsHub } from "@/lib/use-ws-hub";
 
 function formatUsd(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -79,7 +77,6 @@ function StudioPage() {
   const { data: myTrader, isLoading: traderLoading } = useMyTrader();
   const { data: epochsData } = useEpochs();
   const { data: potsData } = usePots();
-  const setLiveMutation = useSetLive();
 
   const epochs = useMemo(() => (Array.isArray(epochsData) ? epochsData : []), [epochsData]);
   const allPots = useMemo(() => (Array.isArray(potsData) ? potsData : []), [potsData]);
@@ -106,7 +103,6 @@ function StudioPage() {
   }, [myPots, epochById, trader]);
 
   const potChannels = livePot ? [`pot:${livePot.id}`] : [];
-  useWsHub(potChannels);
 
   useEffect(() => {
     if (myTrader) setLive(!!myTrader.isLive);
@@ -118,12 +114,6 @@ function StudioPage() {
 
   const toggleLive = (next: boolean) => {
     setLive(next);
-    setLiveMutation.mutate(next, {
-      onError: (err: Error) => {
-        toast.error(err?.message ?? "Failed to update live status");
-        setLive(!next);
-      },
-    });
   };
 
   if (traderLoading) {

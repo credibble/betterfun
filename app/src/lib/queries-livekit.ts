@@ -1,24 +1,27 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
 import { api } from "./api-client";
 
 export function useLiveKitToken() {
+  const { address } = useAccount();
   return useMutation({
     mutationFn: (room: string) =>
       api<{ token: string; url: string }>("/livekit/token", {
         method: "POST",
-        body: JSON.stringify({ room }),
+        body: JSON.stringify({ room, address }),
       }),
   });
 }
 
 export function useLiveKitStreamSetup() {
+  const { address } = useAccount();
   return useMutation({
     mutationFn: (room: string) =>
       api<{ rtmpUrl: string; streamKey: string; serverUrl: string; ingressId?: string; configured?: boolean }>(
         "/livekit/stream-setup",
         {
           method: "POST",
-          body: JSON.stringify({ room }),
+          body: JSON.stringify({ room, address }),
         },
       ),
   });

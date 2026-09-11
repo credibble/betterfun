@@ -35,7 +35,7 @@ export interface SubgraphEpoch {
 
 export interface SubgraphTrader {
   id: string;
-  metadataCID: string;
+  metadata: string; // JSON string: name, handle, bio, avatarUrl, country, tags
   payoutAddress: string;
   traderType: "TRADER" | "ALGO" | "INSTITUTIONAL";
   verified: boolean;
@@ -110,7 +110,7 @@ export async function getTraders(first: number = 100): Promise<SubgraphTrader[]>
   const data = await gql<{ traders: SubgraphTrader[] }>(
     `query GetTraders($first: Int!) {
       traders(first: $first, orderBy: registeredAt, orderDirection: desc) {
-        id metadataCID payoutAddress traderType verified active potCount registeredAt updatedAt
+        id metadata payoutAddress traderType verified active potCount registeredAt updatedAt
       }
     }`,
     { first },
@@ -122,7 +122,7 @@ export async function getTrader(id: string): Promise<SubgraphTrader | null> {
   const data = await gql<{ trader: SubgraphTrader | null }>(
     `query GetTrader($id: Bytes!) {
       trader(id: $id) {
-        id metadataCID payoutAddress traderType verified active potCount registeredAt updatedAt
+        id metadata payoutAddress traderType verified active potCount registeredAt updatedAt
       }
     }`,
     { id },

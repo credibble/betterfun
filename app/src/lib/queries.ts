@@ -27,13 +27,10 @@ export {
   useMyTraderProfile,
   useTraderProfile,
   useTraderCount,
-  useCreateTrader,
-  useUpdateTrader,
-  useSetLive,
-  useIsFollowing,
-  useFollow,
-  useUnfollow,
-  useUploadImage,
+  useRegisterTraderOnChain,
+  useUpdateTraderMetadata,
+  useUpdatePayoutAddress,
+  buildTraderMetadata,
 } from "./hooks/use-traders";
 
 export {
@@ -52,6 +49,16 @@ export {
   useVaultCancelOrder,
   useVaultClaimTraderFees,
   useApproveTusdc,
+  useVaultBalanceOf,
+  useVaultTotalSupply,
+  useTusdcBalance,
+  useVaultPricePerShare,
+  useVaultTraderFees,
+  useVaultHalted,
+  useVaultTotalDeposits,
+  useVaultExposure,
+  useVaultExposureLimit,
+  useVaultAllowance,
   formatNav,
   formatSharePrice,
 } from "./hooks/use-vault-actions";
@@ -69,27 +76,7 @@ export {
   useMarket,
 } from "./queries-markets";
 
-// ── Auth (keep on backend) ────────────────────────────────────────────────────
-
-export {
-  useNonce,
-  useVerify,
-  useMe,
-} from "./queries-auth";
-
-// ── Faucet (keep on backend) ──────────────────────────────────────────────────
-
-export { useFaucetMint } from "./queries-auth";
-
-// ── Comments (keep on backend) ────────────────────────────────────────────────
-
-export {
-  useComments,
-  usePostComment,
-  useLikeComment,
-} from "./queries-comments";
-
-// ── LiveKit (keep on backend) ─────────────────────────────────────────────────
+// ── LiveKit (on backend) ──────────────────────────────────────────────────────
 
 export {
   useLiveKitToken,
@@ -97,10 +84,3 @@ export {
   useLiveKitRoom,
   useLiveKitParticipants,
 } from "./queries-livekit";
-
-// ── Demo (keep on backend) ────────────────────────────────────────────────────
-
-export {
-  useDemoSeed,
-  useDemoFastForward,
-} from "./queries-demo";

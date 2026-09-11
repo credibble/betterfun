@@ -2,20 +2,19 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
-import { PotFactoryAbi, ADDRESSES } from "../contracts";
+import { formatUnits } from "viem";
+import { PotFactoryAbi, PotVaultAbi, ADDRESSES } from "../contracts";
 import { getPots, getPot, type SubgraphPot } from "../subgraph";
-import { api } from "../api-client";
-import type { PotView } from "../types";
+import type { PotView, PotShareView } from "../types";
 
-function sgPotToView(sg: SubgraphPot, backend?: Record<string, unknown>): PotView {
-  const be = backend ?? {};
+function sgPotToView(sg: SubgraphPot): PotView {
   return {
     id: sg.id,
     vault: sg.vault,
     epochId: sg.epoch,
     traderId: sg.trader,
-    name: (be.name as string) ?? `Pot ${sg.id.slice(0, 8)}`,
-    strategy: (be.strategy as PotView["strategy"]) ?? {
+    name: `Pot ${sg.id.slice(0, 8)}`,
+    strategy: {
       title: "",
       note: "",
       risk: "balanced" as const,
@@ -30,11 +29,11 @@ function sgPotToView(sg: SubgraphPot, backend?: Record<string, unknown>): PotVie
     exposureLimit: Number(sg.exposureLimit),
     approvedPools: sg.approvedPools ?? [],
     status: "active" as const,
-    createdAt: (be.createdAt as string) ?? "",
+    createdAt: "",
   };
 }
 
-// ── Subgraph + backend reads ──────────────────────────────────────────────────
+// ── Subgraph reads ──────────────────────────────────────────────────────────
 
 export function usePots(params?: { epochId?: string; traderId?: string }) {
   const { data: sgPots = [], isLoading, error } = useQuery<SubgraphPot[]>({
@@ -43,16 +42,7 @@ export function usePots(params?: { epochId?: string; traderId?: string }) {
     staleTime: 10_000,
   });
 
-  const { data: backendPots = [] } = useQuery<Record<string, unknown>[]>({
-    queryKey: ["backend-pots"],
-    queryFn: () => api<Record<string, unknown>[]>("/pots"),
-    staleTime: 30_000,
-    retry: false,
-  });
-
-  const backendMap = new Map(backendPots.map((p) => [p.id, p]));
-
-  let pots = sgPots.map((sg) => sgPotToView(sg, backendMap.get(sg.id) as Record<string, unknown> | undefined));
+  let pots = sgPots.map(sgPotToView);
 
   if (params?.traderId) {
     pots = pots.filter((p) => p.traderId === params.traderId);
@@ -62,27 +52,16 @@ export function usePots(params?: { epochId?: string; traderId?: string }) {
 }
 
 export function usePot(id: string) {
-  const { data: sgPot, isLoading: sgLoading, error: sgError } = useQuery<SubgraphPot | null>({
+  const { data: sgPot, isLoading, error } = useQuery<SubgraphPot | null>({
     queryKey: ["subgraph", "pot", id],
-    queryFn: async () => {
-      const { getPot: fetchPot } = await import("../subgraph");
-      return fetchPot(id);
-    },
+    queryFn: () => getPot(id),
     enabled: !!id,
     staleTime: 10_000,
   });
 
-  const { data: backendPot, isLoading: beLoading } = useQuery<Record<string, unknown> | null>({
-    queryKey: ["backend-pot", id],
-    queryFn: () => api<Record<string, unknown>>(`/pots/${id}`),
-    enabled: !!id,
-    staleTime: 10_000,
-    retry: false,
-  });
+  const data = sgPot ? sgPotToView(sgPot) : null;
 
-  const data = sgPot ? sgPotToView(sgPot, backendPot as Record<string, unknown> | undefined) : null;
-
-  return { data, isLoading: sgLoading || beLoading, error: sgError };
+  return { data, isLoading, error };
 }
 
 // ── Contract reads ────────────────────────────────────────────────────────────
@@ -108,8 +87,7 @@ export function useIsVault(address: string | undefined) {
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
 /**
- * Create a pot by calling PotFactory.createPot on-chain, then register
- * metadata with the backend.
+ * Create a pot by calling PotFactory.createPot on-chain.
  */
 export function useCreatePot() {
   const { writeContractAsync } = useWriteContract();
@@ -139,30 +117,41 @@ export function useCreatePot() {
         ],
       });
 
-      // Register metadata with backend (best-effort — pot already exists on-chain)
-      try {
-        await api("/pots", {
-          method: "POST",
-          body: JSON.stringify({ vault, epochId: input.epochId, strategy: input.strategy }),
-        });
-      } catch {
-        // Backend metadata is supplementary; the on-chain pot is source of truth
-      }
-
       return vault;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["subgraph", "pots"] });
-      qc.invalidateQueries({ queryKey: ["backend-pots"] });
     },
   });
 }
 
+/**
+ * Read the connected user's LP share balance in a pot's vault directly from
+ * the PotVault contract (ERC20 balanceOf). Returns PotShareView[] with one
+ * entry for the connected user (userId = wallet address).
+ */
 export function usePotShares(potId: string | undefined) {
-  return useQuery<Array<{ id: string; userId: string; shares: number; investedUsd: number; claimableUsd: number }>>({
-    queryKey: ["pots", potId, "shares"],
-    queryFn: () => api(`/pots/${potId}/shares`),
-    enabled: !!potId,
-    retry: false,
+  const { address } = useAccount();
+  const vaultAddress = potId as `0x${string}` | undefined;
+  const enabled = !!potId && !!address;
+
+  const { data: sharesRaw, isLoading } = useReadContract({
+    address: vaultAddress,
+    abi: PotVaultAbi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled },
   });
+
+  const data: PotShareView[] = address && sharesRaw != null
+    ? [{
+        id: potId ?? "",
+        userId: address,
+        shares: Number(formatUnits(sharesRaw as bigint, 18)),
+        investedUsd: 0,
+        claimableUsd: 0,
+      }]
+    : [];
+
+  return { data, isLoading };
 }
