@@ -11,8 +11,8 @@ function sgPotToView(sg: SubgraphPot): PotView {
   return {
     id: sg.id,
     vault: sg.vault,
-    epochId: sg.epoch,
-    traderId: sg.trader,
+    epochId: sg.epoch?.id ?? "",
+    traderId: sg.trader?.id ?? "",
     name: `Pot ${sg.id.slice(0, 8)}`,
     strategy: {
       title: "",

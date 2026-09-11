@@ -1,4 +1,5 @@
 {
+  "buildCommand": "npm run build --workspace=betterfun-app",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }

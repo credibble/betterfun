@@ -1,14 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import {
-  LayoutDashboard,
-  LineChart,
-  Plus,
-  Radio,
-  Search,
-  Users,
-  X,
-} from "lucide-react";
+import { LayoutDashboard, LineChart, Plus, Radio, Search, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import StreamLayout from "@/layouts/StreamLayout";
 import LiveSidebar from "@/components/sidebar/LiveSidebar";
@@ -74,6 +66,7 @@ function StudioPage() {
   const [live, setLive] = useState(false);
   const [streamTitle, setStreamTitle] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
+  const [creatingPot, setCreatingPot] = useState(false);
   const { data: myTrader, isLoading: traderLoading } = useMyTrader();
   const { data: epochsData } = useEpochs();
   const { data: potsData } = usePots();
@@ -101,6 +94,11 @@ function StudioPage() {
     if (!trader) return null;
     return myPots.find((p) => epochById.get(p.epochId)?.status === "live") ?? null;
   }, [myPots, epochById, trader]);
+  const upcomingPot = useMemo(() => {
+    if (!trader) return null;
+    return myPots.find((p) => epochById.get(p.epochId)?.status === "upcoming") ?? null;
+  }, [myPots, epochById, trader]);
+  const nextEpoch = useMemo(() => epochs.find((e) => e.status === "upcoming") ?? null, [epochs]);
 
   const potChannels = livePot ? [`pot:${livePot.id}`] : [];
 
@@ -243,19 +241,29 @@ function StudioPage() {
               epochs={epochs}
               live={live}
               onGoTrade={() => setSection("trade")}
+              creating={creatingPot}
+              onCreatingChange={setCreatingPot}
             />
           )}
           {section === "trade" && (
             <TradeSection
               trader={trader}
               pot={livePot}
-              epochStatus={livePot ? (epochById.get(livePot.epochId)?.status ?? "upcoming") : "upcoming"}
+              upcomingPot={upcomingPot}
+              nextEpoch={nextEpoch}
+              epochStatus={
+                livePot ? (epochById.get(livePot.epochId)?.status ?? "upcoming") : "upcoming"
+              }
               live={live}
               onToggleLive={toggleLive}
               room={room}
               streamTitle={streamTitle}
               setStreamTitle={setStreamTitle}
               setSetupOpen={setSetupOpen}
+              onCreatePot={() => {
+                setSection("overview");
+                setCreatingPot(true);
+              }}
             />
           )}
           {section === "followers" && <FollowersSection trader={trader} />}
@@ -278,52 +286,97 @@ function OverviewSection({
   epochs,
   live,
   onGoTrade,
+  creating,
+  onCreatingChange,
 }: {
   trader: { id: string; name: string; handle: string };
-  pots: { id: string; epochId?: string; nav: number; lpPrice?: number; totalStakers?: number; yourStake?: number; strategy?: { title: string } }[];
+  pots: {
+    id: string;
+    epochId?: string;
+    nav: number;
+    lpPrice?: number;
+    totalStakers?: number;
+    yourStake?: number;
+    strategy?: { title: string };
+  }[];
   epochs: { id: string; number: number; status: string }[];
   live: boolean;
   onGoTrade: () => void;
+  creating: boolean;
+  onCreatingChange: (v: boolean) => void;
 }) {
-  const [creating, setCreating] = useState(false);
   const potTvl = pots.reduce((s: number, p) => s + Number(p.nav), 0);
   const totalStakers = pots.reduce((s: number, p) => s + (p.totalStakers ?? 0), 0);
-  const lpPrice = pots.length > 0 ? pots.reduce((s: number, p) => s + Number(p.lpPrice ?? 1), 0) / pots.length : 1;
+  const lpPrice =
+    pots.length > 0
+      ? pots.reduce((s: number, p) => s + Number(p.lpPrice ?? 1), 0) / pots.length
+      : 1;
 
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="NAV" value={formatUsd(potTvl)} hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`} />
+        <StatCard
+          label="NAV"
+          value={formatUsd(potTvl)}
+          hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`}
+        />
         <StatCard label="LP Price" value={`$${lpPrice.toFixed(4)}`} hint="Average across pots" />
-        <StatCard label="Total Stakers" value={fmtFollowers(totalStakers)} hint="People staking in your pots" />
-        <StatCard label="Your Stake" value={formatUsd(pots.reduce((s: number, p) => s + (p.yourStake ?? 0), 0))} hint="Your deposited capital" />
+        <StatCard
+          label="Total Stakers"
+          value={fmtFollowers(totalStakers)}
+          hint="People staking in your pots"
+        />
+        <StatCard
+          label="Your Stake"
+          value={formatUsd(pots.reduce((s: number, p) => s + (p.yourStake ?? 0), 0))}
+          hint="Your deposited capital"
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <QuickAction title="Trade your pot" body="Place orders, run live, and see your pot in action." onClick={onGoTrade} />
-        <QuickAction title="Create a pot" body="Open a pot for the next round and set your playbook." onClick={() => setCreating((v) => !v)} />
+        <QuickAction
+          title="Trade your pot"
+          body="Place orders, run live, and see your pot in action."
+          onClick={onGoTrade}
+        />
+        <QuickAction
+          title="Create a pot"
+          body="Open a pot for the next round and set your playbook."
+          onClick={() => onCreatingChange(!creating)}
+        />
       </div>
 
-      {creating && <CreatePotForm epochs={epochs} onCreated={() => setCreating(false)} />}
+      {creating && <CreatePotForm epochs={epochs} onCreated={() => onCreatingChange(false)} />}
 
       <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Your pots</h2>
           <button
             type="button"
-            onClick={() => setCreating((v) => !v)}
+            onClick={() => onCreatingChange(!creating)}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-secondary/60"
           >
             <Plus className="h-3.5 w-3.5" /> New pot
           </button>
         </div>
-        <PotsList pots={pots} epochs={epochs} handle={trader.handle} emptyHint="No pots yet — create one for the upcoming round." />
+        <PotsList
+          pots={pots}
+          epochs={epochs}
+          handle={trader.handle}
+          emptyHint="No pots yet — create one for the upcoming round."
+        />
       </div>
     </div>
   );
 }
 
-function CreatePotForm({ epochs, onCreated }: { epochs: { id: string; status: string; number: number }[]; onCreated: () => void }) {
+function CreatePotForm({
+  epochs,
+  onCreated,
+}: {
+  epochs: { id: string; status: string; number: number }[];
+  onCreated: () => void;
+}) {
   const stakeEpoch = epochs.find((e) => e.status === "upcoming") ?? epochs[0];
   const [epochId, setEpochId] = useState(stakeEpoch?.id ?? "");
   const [title, setTitle] = useState("");
@@ -345,7 +398,10 @@ function CreatePotForm({ epochs, onCreated }: { epochs: { id: string; status: st
           title: title.trim(),
           note: note.trim(),
           risk,
-          focus: focus.split(",").map((s) => s.trim()).filter(Boolean),
+          focus: focus
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean),
         },
       },
       {
@@ -450,7 +506,17 @@ function CreatePotForm({ epochs, onCreated }: { epochs: { id: string; status: st
   );
 }
 
-function PotsList({ pots, epochs, handle, emptyHint }: { pots: { id: string; epochId?: string; strategy?: { title: string }; nav: number }[]; epochs: { id: string; status: string; number: number }[]; handle?: string; emptyHint: string }) {
+function PotsList({
+  pots,
+  epochs,
+  handle,
+  emptyHint,
+}: {
+  pots: { id: string; epochId?: string; strategy?: { title: string }; nav: number }[];
+  epochs: { id: string; status: string; number: number }[];
+  handle?: string;
+  emptyHint: string;
+}) {
   if (pots.length === 0) {
     return (
       <p className="mt-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -494,6 +560,8 @@ function PotsList({ pots, epochs, handle, emptyHint }: { pots: { id: string; epo
 function TradeSection({
   trader,
   pot,
+  upcomingPot,
+  nextEpoch,
   epochStatus,
   live,
   onToggleLive,
@@ -501,9 +569,12 @@ function TradeSection({
   streamTitle,
   setStreamTitle,
   setSetupOpen,
+  onCreatePot,
 }: {
-  trader: { id: string; name: string };
+  trader: { id: string; name: string; handle?: string };
   pot: { id: string; strategy?: { title: string }; nav?: number; exposure?: number } | null;
+  upcomingPot: { id: string; strategy?: { title: string } } | null;
+  nextEpoch: { id: string; number: number; status: string } | null;
   epochStatus: string;
   live: boolean;
   onToggleLive: (next: boolean) => void;
@@ -511,6 +582,7 @@ function TradeSection({
   streamTitle: string;
   setStreamTitle: (v: string) => void;
   setSetupOpen: (v: boolean) => void;
+  onCreatePot: () => void;
 }) {
   const [marketId, setMarketId] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -520,14 +592,11 @@ function TradeSection({
 
   // Vault data from subgraph (via pot object)
   const vaultNavUsd = pot?.nav ?? 0;
-  const vaultDeployedPct = vaultNavUsd > 0 && pot?.exposure
-    ? Math.round((pot.exposure / vaultNavUsd) * 100)
-    : 0;
+  const vaultDeployedPct =
+    vaultNavUsd > 0 && pot?.exposure ? Math.round((pot.exposure / vaultNavUsd) * 100) : 0;
   const vaultIdleUsd = vaultNavUsd - (pot?.exposure ?? 0);
   const allMarkets = Array.isArray(markets) ? markets : [];
-  const tradingMarkets = allMarkets.filter(
-    (m) => m.status === "trading" || m.status === "locked",
-  );
+  const tradingMarkets = allMarkets.filter((m) => m.status === "trading" || m.status === "locked");
   const { data: positions = [] } = usePositions(pot?.id ?? "");
   const { data: trades = [] } = useTrades(pot?.id ?? "");
 
@@ -543,7 +612,11 @@ function TradeSection({
     );
   });
 
-  const onTrade = (input: { side: "buy_up" | "buy_down" | "sell_up" | "sell_down"; sizeUsd: number; maxPrice?: number }) => {
+  const onTrade = (input: {
+    side: "buy_up" | "buy_down" | "sell_up" | "sell_down";
+    sizeUsd: number;
+    maxPrice?: number;
+  }) => {
     if (!pot) {
       toast.error("No tradable pot in this epoch yet");
       return;
@@ -553,7 +626,12 @@ function TradeSection({
       return;
     }
     trade.mutate(
-      { pool: marketId as `0x${string}`, side: input.side, sizeUsd: input.sizeUsd, maxPrice: input.maxPrice },
+      {
+        pool: marketId as `0x${string}`,
+        side: input.side,
+        sizeUsd: input.sizeUsd,
+        maxPrice: input.maxPrice,
+      },
       {
         onSuccess: () => {
           toast.success(`${input.side.replace("_", " ")}: order placed`);
@@ -564,18 +642,62 @@ function TradeSection({
   };
 
   if (!pot) {
+    const queued = upcomingPot;
+    const potSlug = trader.handle ?? queued?.id ?? "";
     return (
       <div className="rounded-xl border border-dashed border-border px-4 py-14 text-center">
-        <p className="text-sm text-muted-foreground">
-          You have no pot in the live epoch. Open a pot for the upcoming round and it will become
-          tradable here when it goes live.
-        </p>
-        <Link
-          to="/epochs"
-          className="mt-4 inline-block rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
-        >
-          View epoch calendar
-        </Link>
+        {queued ? (
+          <>
+            <h3 className="text-base font-bold">
+              Your pot is queued for Epoch #{nextEpoch?.number ?? "—"}
+            </h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">
+                {queued.strategy?.title ?? "Your pot"}
+              </span>{" "}
+              is open for the upcoming round. It becomes tradable here the moment the epoch goes
+              live — nothing else to do.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <Link
+                to="/pots/$id"
+                params={{ id: potSlug }}
+                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+              >
+                View your pot
+              </Link>
+              <Link
+                to="/epochs"
+                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+              >
+                Epoch calendar
+              </Link>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 className="text-base font-bold">No tradable pot yet</h3>
+            <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+              You have no pot in the live epoch. Open a pot for the upcoming round and it will
+              become tradable here when it goes live.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={onCreatePot}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+              >
+                <Plus className="h-4 w-4" /> Create a pot
+              </button>
+              <Link
+                to="/epochs"
+                className="inline-flex items-center rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+              >
+                View epoch calendar
+              </Link>
+            </div>
+          </>
+        )}
       </div>
     );
   }
@@ -664,9 +786,7 @@ function TradeSection({
                   volume={Number(m.volume)}
                   status={m.status}
                   onClick={() => setMarketId(m.id)}
-                  className={cn(
-                    marketId === m.id && "ring-2 ring-primary/50",
-                  )}
+                  className={cn(marketId === m.id && "ring-2 ring-primary/50")}
                 />
               );
             })}
@@ -723,12 +843,23 @@ function TradeSection({
                       const mkt = tradingMarkets.find((m) => m.id === t.marketId);
                       return (
                         <tr key={t.id} className="border-t border-border/30">
-                          <td className="py-1.5 pr-2 text-muted-foreground">{mkt?.symbol?.split("-")[0] ?? "—"}</td>
-                          <td className={cn("py-1.5 pr-2 font-semibold capitalize", t.side?.includes("up") ? "text-up" : "text-down")}>
+                          <td className="py-1.5 pr-2 text-muted-foreground">
+                            {mkt?.symbol?.split("-")[0] ?? "—"}
+                          </td>
+                          <td
+                            className={cn(
+                              "py-1.5 pr-2 font-semibold capitalize",
+                              t.side?.includes("up") ? "text-up" : "text-down",
+                            )}
+                          >
                             {t.side?.replace("_", " ") ?? "—"}
                           </td>
-                          <td className="py-1.5 pr-2 text-right tabular-nums">{Number(t.size).toFixed(2)}</td>
-                          <td className="py-1.5 text-right tabular-nums">${Number(t.price).toFixed(3)}</td>
+                          <td className="py-1.5 pr-2 text-right tabular-nums">
+                            {Number(t.size).toFixed(2)}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums">
+                            ${Number(t.price).toFixed(3)}
+                          </td>
                         </tr>
                       );
                     })}
@@ -741,11 +872,7 @@ function TradeSection({
 
         {/* Right: Stream + Trade panel */}
         <div className="space-y-4">
-          <StreamPlayer
-            traderId={trader.id}
-            traderName={trader.name}
-            isLive={live}
-          />
+          <StreamPlayer traderId={trader.id} traderName={trader.name} isLive={live} />
 
           {selectedMarket ? (
             <TradePanel
@@ -760,7 +887,9 @@ function TradeSection({
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-card p-6 text-center">
               <p className="text-sm text-muted-foreground">Select a market to trade</p>
-              <p className="mt-1 text-xs text-muted-foreground/70">Click any market card on the left</p>
+              <p className="mt-1 text-xs text-muted-foreground/70">
+                Click any market card on the left
+              </p>
             </div>
           )}
         </div>
@@ -780,7 +909,11 @@ function FollowersSection({ trader }: { trader: { name: string; followers?: numb
       </div>
 
       <div className="grid gap-3 sm:grid-cols-1">
-        <StatCard label="Total" value={fmtFollowers(trader.followers ?? 0)} hint="All-time follows" />
+        <StatCard
+          label="Total"
+          value={fmtFollowers(trader.followers ?? 0)}
+          hint="All-time follows"
+        />
       </div>
 
       <ul className="divide-y divide-border rounded-xl border border-border bg-card">

@@ -48,8 +48,8 @@ export interface SubgraphTrader {
 export interface SubgraphPot {
   id: string;
   vault: string;
-  epoch: string;
-  trader: string;
+  epoch: { id: string };
+  trader: { id: string };
   exposureLimit: string;
   nav: string;
   totalShares: string;
@@ -141,7 +141,7 @@ export async function getPots(
   const data = await gql<{ pots: SubgraphPot[] }>(
     `query GetPots($first: Int${epochId ? ", $epochId: String!" : ""}) {
       pots(first: $first, orderBy: nav, orderDirection: desc${where}) {
-        id vault epoch trader exposureLimit nav totalShares totalDeposits exposure halted approvedPools
+        id vault epoch { id } trader { id } exposureLimit nav totalShares totalDeposits exposure halted approvedPools
       }
     }`,
     vars,
@@ -153,7 +153,7 @@ export async function getPot(id: string): Promise<SubgraphPot | null> {
   const data = await gql<{ pot: SubgraphPot | null }>(
     `query GetPot($id: ID!) {
       pot(id: $id) {
-        id vault epoch trader exposureLimit nav totalShares totalDeposits exposure halted approvedPools
+        id vault epoch { id } trader { id } exposureLimit nav totalShares totalDeposits exposure halted approvedPools
       }
     }`,
     { id },

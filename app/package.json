@@ -76,5 +76,8 @@
     "@vitejs/plugin-react": "^5.2.0",
     "typescript": "^5.8.3",
     "vite": "7.3.6"
+  },
+  "optionalDependencies": {
+    "lightningcss-linux-x64-gnu": "1.32.0"
   }
 }

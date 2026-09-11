@@ -20,7 +20,7 @@ const NAV_LINKS = [
 
 function NavLinks({ mobile = false, onClick }: { mobile?: boolean; onClick?: () => void }) {
   const { pathname } = useLocation();
-  const isActive = (to: string) => to === "/" ? pathname === "/" : pathname.startsWith(to);
+  const isActive = (to: string) => (to === "/" ? pathname === "/" : pathname.startsWith(to));
 
   if (mobile) {
     return (
@@ -32,7 +32,7 @@ function NavLinks({ mobile = false, onClick }: { mobile?: boolean; onClick?: () 
             onClick={onClick}
             className={cn(
               "text-lg transition-colors hover:text-foreground",
-              isActive(link.to) ? "text-foreground font-medium" : "text-muted-foreground"
+              isActive(link.to) ? "text-foreground font-medium" : "text-muted-foreground",
             )}
           >
             {link.label}
@@ -50,7 +50,7 @@ function NavLinks({ mobile = false, onClick }: { mobile?: boolean; onClick?: () 
           to={link.to}
           className={cn(
             "text-sm transition-colors hover:text-foreground",
-            isActive(link.to) ? "text-foreground font-medium" : "text-muted-foreground"
+            isActive(link.to) ? "text-foreground font-medium" : "text-muted-foreground",
           )}
         >
           {link.label}

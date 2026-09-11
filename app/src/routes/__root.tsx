@@ -1,9 +1,4 @@
-import {
-  Outlet,
-  Link,
-  createRootRoute,
-  useRouter,
-} from "@tanstack/react-router";
+import { Outlet, Link, createRootRoute, useRouter, useLocation } from "@tanstack/react-router";
 import { useState, createContext, useContext } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
@@ -96,11 +91,13 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { pathname } = useLocation();
+  const fullscreen = pathname === "/demo";
 
   return (
     <SidebarContext.Provider value={{ sidebarOpen, setSidebarOpen }}>
-      <TopBar />
-      <div className="pt-14">
+      {!fullscreen && <TopBar />}
+      <div className={fullscreen ? "" : "pt-14"}>
         <Outlet />
       </div>
       <Toaster position="top-center" richColors />

@@ -60,7 +60,9 @@ function Window({
         <span className="ml-2 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground">
           <Zap className="h-3 w-3 fill-primary text-primary" /> betterfun
         </span>
-        {title && <span className="ml-auto text-[10px] font-medium text-muted-foreground">{title}</span>}
+        {title && (
+          <span className="ml-auto text-[10px] font-medium text-muted-foreground">{title}</span>
+        )}
       </div>
       {children}
     </div>
@@ -176,19 +178,13 @@ function SparkPath({ up = true, className }: { up?: boolean; className?: string 
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-      <path
-        d={`${d} L 120 40 L 0 40 Z`}
-        fill="currentColor"
-        opacity="0.08"
-      />
+      <path d={`${d} L 120 40 L 0 40 Z`} fill="currentColor" opacity="0.08" />
     </svg>
   );
 }
 
 function FlowArrow({ className }: { className?: string }) {
-  return (
-    <ArrowRight className={cn("h-4 w-4 shrink-0 text-muted-foreground/50", className)} />
-  );
+  return <ArrowRight className={cn("h-4 w-4 shrink-0 text-muted-foreground/50", className)} />;
 }
 
 /* ------------------------------------------------------------------ */
@@ -221,8 +217,8 @@ function CoverSlide() {
         </h1>
         <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
           BetterFun is a creator-economy prediction market. Human traders and AI agents livestream,
-          run <strong className="text-foreground">epoch pots</strong> their followers fund, and trade the
-          pool on DreamDEX Event Contracts — without ever holding the money.
+          run <strong className="text-foreground">epoch pots</strong> their followers fund, and
+          trade the pool on DreamDEX Event Contracts — without ever holding the money.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <Tag tone="primary">tUSDC · 6 dp</Tag>
@@ -252,13 +248,18 @@ function CoverSlide() {
             <Avatar name="Alyx" size={44} live />
             <div className="min-w-0">
               <p className="truncate text-sm font-bold">Alyx Voss · @alyx</p>
-              <p className="text-[11px] text-muted-foreground">Momentum scalper — BTC/ETH binaries</p>
+              <p className="text-[11px] text-muted-foreground">
+                Momentum scalper — BTC/ETH binaries
+              </p>
             </div>
             <PhasePill label="Live" tone="up" />
           </div>
           <div className="relative h-24 overflow-hidden rounded-lg border border-border bg-background/60">
             <div className="absolute inset-0 bg-gradient-to-t from-primary/5 to-transparent" />
-            <SparkPath up className="absolute inset-x-2 top-1 h-20 w-[calc(100%-1rem)] text-primary" />
+            <SparkPath
+              up
+              className="absolute inset-x-2 top-1 h-20 w-[calc(100%-1rem)] text-primary"
+            />
             <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-semibold text-white">
               <Eye className="h-3 w-3" /> 1,284
             </span>
@@ -302,10 +303,7 @@ function ProblemSlide() {
             body: "Retail prediction trading is opaque and high-risk — no capital lock, no split of outcomes, no way to verify the trader.",
           },
         ].map((c) => (
-          <div
-            key={c.title}
-            className="rounded-xl border border-border bg-card p-4 shadow-soft"
-          >
+          <div key={c.title} className="rounded-xl border border-border bg-card p-4 shadow-soft">
             <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/15 text-primary">
               <c.icon className="h-5 w-5" />
             </span>
@@ -335,7 +333,8 @@ function ProblemSlide() {
           <div>
             <p className="text-sm font-bold">Back a pot</p>
             <p className="text-xs text-muted-foreground">
-              Fund an epoch pot. If it profits you share the gains — <span className="font-bold text-up">80%</span>.
+              Fund an epoch pot. If it profits you share the gains —{" "}
+              <span className="font-bold text-up">80%</span>.
             </p>
             <p className="mt-1 text-[11px] text-up">$500 → est. $592 (+18.4%)</p>
           </div>
@@ -435,7 +434,10 @@ function ProductSlide() {
             body: "Orchestrates epochs, executes orders, redeems winners, and settles the payout waterfall.",
           },
         ].map((c) => (
-          <div key={c.title} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-soft">
+          <div
+            key={c.title}
+            className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-soft"
+          >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
               <c.icon className="h-4 w-4" />
             </span>
@@ -487,7 +489,10 @@ function HowItWorksSlide() {
     <div className="space-y-6">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {HOW_STEPS.map((s, i) => (
-          <div key={s.title} className="relative flex flex-col rounded-xl border border-border bg-card p-4 shadow-soft">
+          <div
+            key={s.title}
+            className="relative flex flex-col rounded-xl border border-border bg-card p-4 shadow-soft"
+          >
             <div className="flex items-center justify-between">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-primary/15 text-primary">
                 <s.icon className="h-5 w-5" />
@@ -515,13 +520,14 @@ function HowItWorksSlide() {
             ["Tue 12:00", "Settle & distribute", "up"],
             ["Tue 12:05", "Followers claim", "muted"],
           ].map(([t, l, tone]) => (
-            <div
-              key={t}
-              className="rounded-lg border border-border bg-card px-3 py-2"
-            >
+            <div key={t} className="rounded-lg border border-border bg-card px-3 py-2">
               <p className="num text-[11px] font-bold">{t}</p>
               <p className="mt-0.5 text-[11px] text-muted-foreground">{l}</p>
-              <PhasePill label={l.split(" ")[0]} tone={tone as "primary" | "up" | "warn" | "muted"} className="mt-1.5" />
+              <PhasePill
+                label={l.split(" ")[0]}
+                tone={tone as "primary" | "up" | "warn" | "muted"}
+                className="mt-1.5"
+              />
             </div>
           ))}
         </div>
@@ -566,7 +572,10 @@ function EpochMachineSlide() {
     <div className="space-y-6">
       <div className="grid gap-2 md:grid-cols-4">
         {PHASES.map((p, i) => (
-          <div key={p.label} className="relative rounded-xl border border-border bg-card p-4 shadow-soft">
+          <div
+            key={p.label}
+            className="relative rounded-xl border border-border bg-card p-4 shadow-soft"
+          >
             <div className="flex items-center justify-between">
               <PhasePill label={p.label} tone={p.tone} />
               <p.icon className="h-4 w-4 text-muted-foreground" />
@@ -603,9 +612,9 @@ function EpochMachineSlide() {
         <p className="mt-4 flex items-start gap-2 rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-foreground">
           <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warn" />
           <span>
-            A <strong>settlement buffer</strong> (30–60 min) keeps trading inside the epoch and lets every
-            DreamDEX market reach <em>Resolved</em> before NAV is computed. When an epoch settles, the next
-            one rolls over automatically.
+            A <strong>settlement buffer</strong> (30–60 min) keeps trading inside the epoch and lets
+            every DreamDEX market reach <em>Resolved</em> before NAV is computed. When an epoch
+            settles, the next one rolls over automatically.
           </span>
         </p>
       </div>
@@ -674,13 +683,22 @@ function PotSlide() {
                             p.side === "Up" ? "bg-up/15 text-up" : "bg-down/15 text-down",
                           )}
                         >
-                          {p.side === "Up" ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+                          {p.side === "Up" ? (
+                            <ArrowUpRight className="h-3 w-3" />
+                          ) : (
+                            <ArrowDownRight className="h-3 w-3" />
+                          )}
                           {p.side}
                         </span>
                       </td>
                       <td className="num px-3 py-1.5 text-right">{p.contracts}</td>
                       <td className="num px-3 py-1.5 text-right">{p.price}</td>
-                      <td className={cn("num px-3 py-1.5 text-right font-bold", p.pnl.startsWith("+") ? "text-up" : "text-down")}>
+                      <td
+                        className={cn(
+                          "num px-3 py-1.5 text-right font-bold",
+                          p.pnl.startsWith("+") ? "text-up" : "text-down",
+                        )}
+                      >
                         {p.pnl}
                       </td>
                     </tr>
@@ -715,7 +733,10 @@ function PotSlide() {
             body: "Fills, positions and NAV push to followers via the WebSocket hub — you watch the pot live, trade by trade.",
           },
         ].map((c) => (
-          <div key={c.title} className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-soft">
+          <div
+            key={c.title}
+            className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 shadow-soft"
+          >
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary">
               <c.icon className="h-4 w-4" />
             </span>
@@ -791,7 +812,7 @@ function CustodySlide() {
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <ArrowRight className="h-4 w-4 shrink-0" />
-            <span className="num font-mono text-[11px]">m/44'/60'/0'/0/{'{potIndex}'}</span>
+            <span className="num font-mono text-[11px]">m/44'/60'/0'/0/{"{potIndex}"}</span>
             <ArrowRight className="h-4 w-4 shrink-0" />
           </div>
           <div className="rounded-lg border border-primary/30 bg-primary/10 px-4 py-3 text-center">
@@ -802,10 +823,11 @@ function CustodySlide() {
         <p className="mt-4 flex items-start gap-2 rounded-lg border border-up/30 bg-up/5 px-3 py-2 text-xs text-foreground">
           <Shield className="mt-0.5 h-4 w-4 shrink-0 text-up" />
           <span>
-            <strong>Non-custodial-with-custody.</strong> Funds live in tUSDC controlled by a per-pot signer key held
-            only by the backend. Trading authority is separate from payout authority: only{" "}
-            <span className="font-mono text-[11px]">SettlementService.claimPayout</span> can move money off the pot,
-            and it goes pro-rata to followers only.
+            <strong>Non-custodial-with-custody.</strong> Funds live in tUSDC controlled by a per-pot
+            signer key held only by the backend. Trading authority is separate from payout
+            authority: only{" "}
+            <span className="font-mono text-[11px]">SettlementService.claimPayout</span> can move
+            money off the pot, and it goes pro-rata to followers only.
           </span>
         </p>
       </div>
@@ -863,7 +885,10 @@ function WaterfallSlide() {
               ["$920", "Protocol — 5% of gains", "link"],
               ["$100,000", "Principal returned 1:1", "muted"],
             ].map(([v, l, tone]) => (
-              <div key={l} className="flex items-center justify-between rounded-lg border border-border bg-background/60 px-3 py-2">
+              <div
+                key={l}
+                className="flex items-center justify-between rounded-lg border border-border bg-background/60 px-3 py-2"
+              >
                 <span className="text-[11px] text-muted-foreground">{l}</span>
                 <span
                   className={cn(
@@ -880,8 +905,8 @@ function WaterfallSlide() {
             ))}
           </div>
           <p className="mt-3 text-[11px] text-muted-foreground">
-            Cuts are taken <strong className="text-foreground">only on gains</strong> — everyone is paid out of profit,
-            so incentives are aligned.
+            Cuts are taken <strong className="text-foreground">only on gains</strong> — everyone is
+            paid out of profit, so incentives are aligned.
           </p>
         </div>
 
@@ -892,8 +917,8 @@ function WaterfallSlide() {
               <Tag tone="down">−9.0%</Tag>
             </div>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Pot ends at <strong className="text-foreground">$91,000</strong>. The trader and the protocol get{" "}
-              <strong className="text-down">$0</strong> — followers split what's left{" "}
+              Pot ends at <strong className="text-foreground">$91,000</strong>. The trader and the
+              protocol get <strong className="text-down">$0</strong> — followers split what's left{" "}
               <strong className="text-foreground">pro-rata by shares</strong>.
             </p>
             <div className="mt-3 flex h-7 w-full overflow-hidden rounded-lg border border-border bg-secondary">
@@ -910,8 +935,9 @@ function WaterfallSlide() {
               perShare = finalNav ÷ totalShares
             </p>
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              NAV is read from the pot signer's on-chain tUSDC balance <em>after</em> all redemptions — the real
-              number, never an estimate. Dust is left in the pot (never fractional cents).
+              NAV is read from the pot signer's on-chain tUSDC balance <em>after</em> all
+              redemptions — the real number, never an estimate. Dust is left in the pot (never
+              fractional cents).
             </p>
           </div>
         </div>
@@ -962,8 +988,8 @@ function AiSlide() {
           </pre>
           <p className="mt-3 flex items-start gap-2 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-[11px] text-muted-foreground">
             <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-            The model gets live spot, order books, time-to-expiry, and the pot's cash/deployed — then must return a
-            schema-valid decision or <span className="font-mono">hold</span>.
+            The model gets live spot, order books, time-to-expiry, and the pot's cash/deployed —
+            then must return a schema-valid decision or <span className="font-mono">hold</span>.
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4 shadow-soft">
@@ -1010,7 +1036,10 @@ function AiSlide() {
           <p className="text-sm font-bold">Execution discipline</p>
           <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
             {[
-              ["Price-capped IOC", "taker only when the touch beats maxPrice — effectively a limit-to-touch"],
+              [
+                "Price-capped IOC",
+                "taker only when the touch beats maxPrice — effectively a limit-to-touch",
+              ],
               ["POST_ONLY for resting quotes", "maker orders that must not cross"],
               ["Quantized to tick/lot grid", "dodges the 18-decimal float bug on the venue"],
               ["One exchange + lock per pot", "serialised nonces — never two bots on one key"],
@@ -1052,7 +1081,9 @@ function LiveSlide() {
           </div>
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
             <Avatar name="Alyx" size={64} live />
-            <p className="text-sm font-bold text-white drop-shadow">Alyx — BTC/ETH momentum scalping</p>
+            <p className="text-sm font-bold text-white drop-shadow">
+              Alyx — BTC/ETH momentum scalping
+            </p>
             <button className="grid h-12 w-12 place-items-center rounded-full bg-white/90 text-foreground shadow-lg">
               <Play className="ml-0.5 h-5 w-5 fill-current" />
             </button>
@@ -1076,7 +1107,10 @@ function LiveSlide() {
           </p>
           <div className="mt-3 space-y-2">
             {msgs.map(([who, text]) => (
-              <div key={text} className="flex items-start gap-2 rounded-lg border border-border bg-background/60 px-3 py-2">
+              <div
+                key={text}
+                className="flex items-start gap-2 rounded-lg border border-border bg-background/60 px-3 py-2"
+              >
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
                   {who.charAt(0).toUpperCase()}
                 </span>
@@ -1092,7 +1126,10 @@ function LiveSlide() {
           <p className="text-sm font-bold">Built for the creator economy</p>
           <ul className="mt-3 space-y-2 text-xs text-muted-foreground">
             {[
-              ["Human traders", "stream their real process on LiveKit — transparency you can audit"],
+              [
+                "Human traders",
+                "stream their real process on LiveKit — transparency you can audit",
+              ],
               ["AI agents", "stream data-rooms: books, signals and rationale, not hype"],
               ["Realtime everywhere", "positions, fills, NAV and chat push over the WS hub"],
             ].map(([t, s]) => (
@@ -1127,7 +1164,13 @@ function StackSlide() {
       icon: Server,
       name: "Backend",
       tone: "up" as const,
-      chips: ["Express + TypeScript", "TypeORM + Postgres", "BullMQ + Redis", "JWT · SIWE auth", "LiveKit · OpenAI · WS hub"],
+      chips: [
+        "Express + TypeScript",
+        "TypeORM + Postgres",
+        "BullMQ + Redis",
+        "JWT · SIWE auth",
+        "LiveKit · OpenAI · WS hub",
+      ],
       body: "Epoch/pot state machine, delegated trading engine, settlement, AI agent, realtime push.",
     },
     {
@@ -1149,7 +1192,10 @@ function StackSlide() {
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {layers.map((l, i) => (
-          <div key={l.name} className="relative rounded-xl border border-border bg-card p-4 shadow-soft">
+          <div
+            key={l.name}
+            className="relative rounded-xl border border-border bg-card p-4 shadow-soft"
+          >
             <div className="flex items-center justify-between">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary/15 text-primary">
                 <l.icon className="h-4 w-4" />
@@ -1176,9 +1222,9 @@ function StackSlide() {
         <p className="flex items-start gap-2 text-xs leading-relaxed text-foreground">
           <Rocket className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <span>
-            <strong>No smart contracts were deployed.</strong> Non-custodial delegated trading is achieved with
-            per-pot HD-derived signer keys held server-side plus strict software-level authority separation —
-            trading and payout are different paths with different rules.
+            <strong>No smart contracts were deployed.</strong> Non-custodial delegated trading is
+            achieved with per-pot HD-derived signer keys held server-side plus strict software-level
+            authority separation — trading and payout are different paths with different rules.
           </span>
         </p>
       </div>
@@ -1192,9 +1238,34 @@ function StackSlide() {
 
 function RoadmapSlide() {
   const roadmap = [
-    { phase: "Now", tone: "up" as const, items: ["Epoch-locked pots with 1:1 shares", "Human + AI traders", "Per-pot HD signers · non-custodial", "Settlement waterfall + claims"] },
-    { phase: "Next", tone: "primary" as const, items: ["On-chain vault (ERC-6909 / Safe)", "Restricted canCall / cannotCall roles", "Delegated trading transparency feed"] },
-    { phase: "Later", tone: "muted" as const, items: ["Multi-trader pot marketplace", "Operator / session-key models", "Mainnet — USDso (18 dp)"] },
+    {
+      phase: "Now",
+      tone: "up" as const,
+      items: [
+        "Epoch-locked pots with 1:1 shares",
+        "Human + AI traders",
+        "Per-pot HD signers · non-custodial",
+        "Settlement waterfall + claims",
+      ],
+    },
+    {
+      phase: "Next",
+      tone: "primary" as const,
+      items: [
+        "On-chain vault (ERC-6909 / Safe)",
+        "Restricted canCall / cannotCall roles",
+        "Delegated trading transparency feed",
+      ],
+    },
+    {
+      phase: "Later",
+      tone: "muted" as const,
+      items: [
+        "Multi-trader pot marketplace",
+        "Operator / session-key models",
+        "Mainnet — USDso (18 dp)",
+      ],
+    },
   ];
   return (
     <div className="space-y-6">
@@ -1212,9 +1283,7 @@ function RoadmapSlide() {
                 </li>
               ))}
             </ul>
-            {i < roadmap.length - 1 && (
-              <FlowArrow className="absolute" />
-            )}
+            {i < roadmap.length - 1 && <FlowArrow className="absolute" />}
           </div>
         ))}
       </div>
@@ -1222,20 +1291,32 @@ function RoadmapSlide() {
       <div className="rounded-xl border border-border bg-gradient-to-br from-primary/10 to-accent/10 p-6 text-center">
         <p className="text-sm font-bold">See it in action</p>
         <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-          Fund a pot before the lock, watch the trader put it to work live, then claim your share when the epoch
-          settles — all on Somnia testnet.
+          Fund a pot before the lock, watch the trader put it to work live, then claim your share
+          when the epoch settles — all on Somnia testnet.
         </p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
-          <Link to="/pots" className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none">
+          <Link
+            to="/pots"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-block-primary transition-all duration-150 hover:brightness-110 active:translate-y-[3px] active:shadow-none"
+          >
             Explore pots <ArrowRight className="h-4 w-4" />
           </Link>
-          <Link to="/epochs" className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60">
+          <Link
+            to="/epochs"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+          >
             Epoch calendar
           </Link>
-          <Link to="/traders" className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60">
+          <Link
+            to="/traders"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+          >
             Top traders
           </Link>
-          <Link to="/studio" className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60">
+          <Link
+            to="/studio"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-4 py-2 text-sm font-semibold hover:bg-secondary/60"
+          >
             Studio
           </Link>
         </div>
