@@ -1,12 +1,10 @@
 {
-  "gov": "0xa791c5a9c78e1ef785ce74db9a729a595e01a0f3",
-  "govBlock": 485577210,
-  "epoch": "0xdcf29d5a725192ebae951af13651cf789062d818",
-  "epochBlock": 485577225,
-  "traderReg": "0x58bf87125d89f84bdd134133e0ff86097c44a4fa",
-  "traderRegBlock": 485577238,
-  "meta": "0x4cd40a99e636d2c08b48305a9da29d187712ed78",
-  "metaBlock": 485577252,
-  "factory": "0x858baca13a3a516e31e8fa4d6165e95a25106c1b",
-  "factoryBlock": 485577265
+  "gov": "0x908a1736b1ba53b983261a6b1f9880cf7b3c2fba",
+  "govBlock": 485695050,
+  "epoch": "0x395cb86676974d2525ee07f3c9a2104c19ac4d13",
+  "epochBlock": 485695062,
+  "traderReg": "0xcda2c9e1495cba73362401fb09628e3d5c896430",
+  "traderRegBlock": 485695077,
+  "factory": "0x88c67cef8d24ae4faf3a1fdd78e6640eef471d79",
+  "factoryBlock": 485695092
 }

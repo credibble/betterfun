@@ -47,9 +47,9 @@ dataSources:
     name: EpochController
     network: somnia-testnet
     source:
-      address: "0xdcf29d5a725192ebae951af13651cf789062d818"
+      address: "0x395cb86676974d2525ee07f3c9a2104c19ac4d13"
       abi: EpochController
-      startBlock: 485577225
+      startBlock: 485695062
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -76,9 +76,9 @@ dataSources:
     name: TraderRegistry
     network: somnia-testnet
     source:
-      address: "0x58bf87125d89f84bdd134133e0ff86097c44a4fa"
+      address: "0xcda2c9e1495cba73362401fb09628e3d5c896430"
       abi: TraderRegistry
-      startBlock: 485577238
+      startBlock: 485695077
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -90,9 +90,9 @@ dataSources:
         - name: TraderRegistry
           file: TraderRegistry\TraderRegistry.json
       eventHandlers:
-        - event: TraderRegistered(indexed address,bytes32,address,uint8)
+        - event: TraderRegistered(indexed address,string,address,uint8)
           handler: handleTraderRegistered
-        - event: TraderUpdated(indexed address,bytes32)
+        - event: TraderUpdated(indexed address,string)
           handler: handleTraderUpdated
         - event: TraderVerified(indexed address,bool)
           handler: handleTraderVerified
@@ -102,9 +102,9 @@ dataSources:
     name: PotFactory
     network: somnia-testnet
     source:
-      address: "0x858baca13a3a516e31e8fa4d6165e95a25106c1b"
+      address: "0x88c67cef8d24ae4faf3a1fdd78e6640eef471d79"
       abi: PotFactory
-      startBlock: 485577265
+      startBlock: 485695092
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -121,32 +121,12 @@ dataSources:
         - event: PotDeployed(indexed address,indexed uint256,indexed address,uint256,uint256)
           handler: handlePotDeployed
   - kind: ethereum/contract
-    name: MetadataStore
-    network: somnia-testnet
-    source:
-      address: "0x4cd40a99e636d2c08b48305a9da29d187712ed78"
-      abi: MetadataStore
-      startBlock: 485577252
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.7
-      language: wasm/assemblyscript
-      file: MetadataStore\MetadataStore.wasm
-      entities:
-        - MetadataUpdate
-      abis:
-        - name: MetadataStore
-          file: MetadataStore\MetadataStore.json
-      eventHandlers:
-        - event: MetadataSet(indexed uint8,indexed bytes32,bytes32,uint256)
-          handler: handleMetadataSet
-  - kind: ethereum/contract
     name: PlatformGovernance
     network: somnia-testnet
     source:
-      address: "0xa791c5a9c78e1ef785ce74db9a729a595e01a0f3"
+      address: "0x908a1736b1ba53b983261a6b1f9880cf7b3c2fba"
       abi: PlatformGovernance
-      startBlock: 485577210
+      startBlock: 485695050
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

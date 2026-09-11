@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Heart, Share2, Bell, Users } from "lucide-react";
-import type { TraderProfileSchema as Trader } from "@betterfun/shared";
+import type { TraderView as Trader } from "@/lib/types";
 
 type StreamInfoProps = {
   trader: Trader;

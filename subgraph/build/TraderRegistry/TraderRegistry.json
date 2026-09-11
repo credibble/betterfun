@@ -53,9 +53,9 @@
         "internalType": "struct TraderRegistry.TraderProfile",
         "components": [
           {
-            "name": "metadataCID",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "metadata",
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "payoutAddress",
@@ -141,9 +141,9 @@
     "name": "registerTrader",
     "inputs": [
       {
-        "name": "metadataCID",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "metadata",
+        "type": "string",
+        "internalType": "string"
       },
       {
         "name": "payoutAddress",
@@ -247,9 +247,9 @@
     ],
     "outputs": [
       {
-        "name": "metadataCID",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "metadata",
+        "type": "string",
+        "internalType": "string"
       },
       {
         "name": "payoutAddress",
@@ -312,9 +312,9 @@
     "name": "updateMetadata",
     "inputs": [
       {
-        "name": "metadataCID",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "metadata",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -383,10 +383,10 @@
         "internalType": "address"
       },
       {
-        "name": "metadataCID",
-        "type": "bytes32",
+        "name": "metadata",
+        "type": "string",
         "indexed": false,
-        "internalType": "bytes32"
+        "internalType": "string"
       },
       {
         "name": "payoutAddress",
@@ -414,10 +414,10 @@
         "internalType": "address"
       },
       {
-        "name": "metadataCID",
-        "type": "bytes32",
+        "name": "metadata",
+        "type": "string",
         "indexed": false,
-        "internalType": "bytes32"
+        "internalType": "string"
       }
     ],
     "anonymous": false

@@ -1,7 +1,7 @@
 import StreamCard from "./StreamCard";
 import { useLiveStreams } from "@/hooks/use-live-streams";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { TraderProfileSchema as Trader } from "@betterfun/shared";
+import type { TraderView as Trader } from "@/lib/types";
 
 export default function FeaturedStreams() {
   const { data: liveTraders = [], isLoading } = useLiveStreams();

@@ -4,7 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SidebarTraderCard from "./SidebarTraderCard";
 import CategoryFilter from "./CategoryFilter";
 import { useLiveStreams } from "@/hooks/use-live-streams";
-import type { TraderProfileSchema as Trader } from "@betterfun/shared";
+import type { TraderView as Trader } from "@/lib/types";
 
 type LiveSidebarProps = {
   className?: string;

@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
-import type { TraderProfileSchema as Trader } from "@betterfun/shared";
+import type { TraderView as Trader } from "@/lib/types";
 
 type SidebarTraderCardProps = {
   trader: Trader;

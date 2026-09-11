@@ -148,17 +148,17 @@ export class Trader extends Entity {
     this.set("id", Value.fromBytes(value));
   }
 
-  get metadataCID(): Bytes {
-    let value = this.get("metadataCID");
+  get metadata(): string {
+    let value = this.get("metadata");
     if (!value || value.kind == ValueKind.NULL) {
       throw new Error("Cannot return null for a required field.");
     } else {
-      return value.toBytes();
+      return value.toString();
     }
   }
 
-  set metadataCID(value: Bytes) {
-    this.set("metadataCID", Value.fromBytes(value));
+  set metadata(value: string) {
+    this.set("metadata", Value.fromString(value));
   }
 
   get payoutAddress(): Bytes {
@@ -1099,113 +1099,6 @@ export class FeeClaim extends Entity {
 
   set isProtocol(value: boolean) {
     this.set("isProtocol", Value.fromBoolean(value));
-  }
-
-  get timestamp(): BigInt {
-    let value = this.get("timestamp");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set timestamp(value: BigInt) {
-    this.set("timestamp", Value.fromBigInt(value));
-  }
-}
-
-export class MetadataUpdate extends Entity {
-  constructor(id: string) {
-    super();
-    this.set("id", Value.fromString(id));
-  }
-
-  save(): void {
-    let id = this.get("id");
-    assert(id != null, "Cannot save MetadataUpdate entity without an ID");
-    if (id) {
-      assert(
-        id.kind == ValueKind.STRING,
-        `Entities of type MetadataUpdate must have an ID of type String but the id '${id.displayData()}' is of type ${id.displayKind()}`,
-      );
-      store.set("MetadataUpdate", id.toString(), this);
-    }
-  }
-
-  static loadInBlock(id: string): MetadataUpdate | null {
-    return changetype<MetadataUpdate | null>(
-      store.get_in_block("MetadataUpdate", id),
-    );
-  }
-
-  static load(id: string): MetadataUpdate | null {
-    return changetype<MetadataUpdate | null>(store.get("MetadataUpdate", id));
-  }
-
-  get id(): string {
-    let value = this.get("id");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toString();
-    }
-  }
-
-  set id(value: string) {
-    this.set("id", Value.fromString(value));
-  }
-
-  get entityType(): string {
-    let value = this.get("entityType");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toString();
-    }
-  }
-
-  set entityType(value: string) {
-    this.set("entityType", Value.fromString(value));
-  }
-
-  get entityKey(): Bytes {
-    let value = this.get("entityKey");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBytes();
-    }
-  }
-
-  set entityKey(value: Bytes) {
-    this.set("entityKey", Value.fromBytes(value));
-  }
-
-  get cid(): Bytes {
-    let value = this.get("cid");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBytes();
-    }
-  }
-
-  set cid(value: Bytes) {
-    this.set("cid", Value.fromBytes(value));
-  }
-
-  get version(): BigInt {
-    let value = this.get("version");
-    if (!value || value.kind == ValueKind.NULL) {
-      throw new Error("Cannot return null for a required field.");
-    } else {
-      return value.toBigInt();
-    }
-  }
-
-  set version(value: BigInt) {
-    this.set("version", Value.fromBigInt(value));
   }
 
   get timestamp(): BigInt {

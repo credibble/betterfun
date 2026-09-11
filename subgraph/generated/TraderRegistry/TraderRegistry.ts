@@ -81,8 +81,8 @@ export class TraderRegistered__Params {
     return this._event.parameters[0].value.toAddress();
   }
 
-  get metadataCID(): Bytes {
-    return this._event.parameters[1].value.toBytes();
+  get metadata(): string {
+    return this._event.parameters[1].value.toString();
   }
 
   get payoutAddress(): Address {
@@ -111,8 +111,8 @@ export class TraderUpdated__Params {
     return this._event.parameters[0].value.toAddress();
   }
 
-  get metadataCID(): Bytes {
-    return this._event.parameters[1].value.toBytes();
+  get metadata(): string {
+    return this._event.parameters[1].value.toString();
   }
 }
 
@@ -139,8 +139,8 @@ export class TraderVerified__Params {
 }
 
 export class TraderRegistry__getTraderResultValue0Struct extends ethereum.Tuple {
-  get metadataCID(): Bytes {
-    return this[0].toBytes();
+  get metadata(): string {
+    return this[0].toString();
   }
 
   get payoutAddress(): Address {
@@ -173,7 +173,7 @@ export class TraderRegistry__getTraderResultValue0Struct extends ethereum.Tuple 
 }
 
 export class TraderRegistry__tradersResult {
-  value0: Bytes;
+  value0: string;
   value1: Address;
   value2: i32;
   value3: boolean;
@@ -183,7 +183,7 @@ export class TraderRegistry__tradersResult {
   value7: BigInt;
 
   constructor(
-    value0: Bytes,
+    value0: string,
     value1: Address,
     value2: i32,
     value3: boolean,
@@ -204,7 +204,7 @@ export class TraderRegistry__tradersResult {
 
   toMap(): TypedMap<string, ethereum.Value> {
     let map = new TypedMap<string, ethereum.Value>();
-    map.set("value0", ethereum.Value.fromFixedBytes(this.value0));
+    map.set("value0", ethereum.Value.fromString(this.value0));
     map.set("value1", ethereum.Value.fromAddress(this.value1));
     map.set(
       "value2",
@@ -218,7 +218,7 @@ export class TraderRegistry__tradersResult {
     return map;
   }
 
-  getMetadataCID(): Bytes {
+  getMetadata(): string {
     return this.value0;
   }
 
@@ -278,7 +278,7 @@ export class TraderRegistry extends ethereum.SmartContract {
   getTrader(trader: Address): TraderRegistry__getTraderResultValue0Struct {
     let result = super.call(
       "getTrader",
-      "getTrader(address):((bytes32,address,uint8,bool,bool,uint256,uint256,uint256))",
+      "getTrader(address):((string,address,uint8,bool,bool,uint256,uint256,uint256))",
       [ethereum.Value.fromAddress(trader)],
     );
 
@@ -292,7 +292,7 @@ export class TraderRegistry extends ethereum.SmartContract {
   ): ethereum.CallResult<TraderRegistry__getTraderResultValue0Struct> {
     let result = super.tryCall(
       "getTrader",
-      "getTrader(address):((bytes32,address,uint8,bool,bool,uint256,uint256,uint256))",
+      "getTrader(address):((string,address,uint8,bool,bool,uint256,uint256,uint256))",
       [ethereum.Value.fromAddress(trader)],
     );
     if (result.reverted) {
@@ -373,12 +373,12 @@ export class TraderRegistry extends ethereum.SmartContract {
   traders(param0: Address): TraderRegistry__tradersResult {
     let result = super.call(
       "traders",
-      "traders(address):(bytes32,address,uint8,bool,bool,uint256,uint256,uint256)",
+      "traders(address):(string,address,uint8,bool,bool,uint256,uint256,uint256)",
       [ethereum.Value.fromAddress(param0)],
     );
 
     return new TraderRegistry__tradersResult(
-      result[0].toBytes(),
+      result[0].toString(),
       result[1].toAddress(),
       result[2].toI32(),
       result[3].toBoolean(),
@@ -394,7 +394,7 @@ export class TraderRegistry extends ethereum.SmartContract {
   ): ethereum.CallResult<TraderRegistry__tradersResult> {
     let result = super.tryCall(
       "traders",
-      "traders(address):(bytes32,address,uint8,bool,bool,uint256,uint256,uint256)",
+      "traders(address):(string,address,uint8,bool,bool,uint256,uint256,uint256)",
       [ethereum.Value.fromAddress(param0)],
     );
     if (result.reverted) {
@@ -403,7 +403,7 @@ export class TraderRegistry extends ethereum.SmartContract {
     let value = result.value;
     return ethereum.CallResult.fromValue(
       new TraderRegistry__tradersResult(
-        value[0].toBytes(),
+        value[0].toString(),
         value[1].toAddress(),
         value[2].toI32(),
         value[3].toBoolean(),
@@ -523,8 +523,8 @@ export class RegisterTraderCall__Inputs {
     this._call = call;
   }
 
-  get metadataCID(): Bytes {
-    return this._call.inputValues[0].value.toBytes();
+  get metadata(): string {
+    return this._call.inputValues[0].value.toString();
   }
 
   get payoutAddress(): Address {
@@ -689,8 +689,8 @@ export class UpdateMetadataCall__Inputs {
     this._call = call;
   }
 
-  get metadataCID(): Bytes {
-    return this._call.inputValues[0].value.toBytes();
+  get metadata(): string {
+    return this._call.inputValues[0].value.toString();
   }
 }
 
