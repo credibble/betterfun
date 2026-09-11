@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { useCreateTrader, useUpdateTrader, useMyTrader, useUploadImage } from "@/lib/queries";
+import { useCreateTrader, useUpdateTrader, useMyTraderProfile, useUploadImage } from "@/lib/queries";
 
 const COUNTRIES = [
   "Argentina",
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/become-a-trader/settings")({
 
 function TraderSettingsPage() {
   const navigate = useNavigate();
-  const { data: myTrader, isLoading: meLoading } = useMyTrader();
+  const { data: myTrader, isLoading: meLoading } = useMyTraderProfile();
   const createTrader = useCreateTrader();
   const updateTrader = useUpdateTrader();
   const uploadImage = useUploadImage();
@@ -126,7 +126,7 @@ function TraderSettingsPage() {
         setAvatarUrl(data.url);
         toast.success("Image uploaded");
       },
-      onError: (err: any) => toast.error(err?.message ?? "Upload failed"),
+      onError: (err: Error) => toast.error(err?.message ?? "Upload failed"),
     });
   };
 
@@ -166,7 +166,7 @@ function TraderSettingsPage() {
     if (editing) {
       updateTrader.mutate(base, {
         onSuccess: () => finish("Profile updated"),
-        onError: (err: any) => toast.error(err?.message ?? "Update failed"),
+        onError: (err: Error) => toast.error(err?.message ?? "Update failed"),
       });
       return;
     }
@@ -187,7 +187,7 @@ function TraderSettingsPage() {
       },
       {
         onSuccess: () => finish("Profile created"),
-        onError: (err: any) => toast.error(err?.message ?? "Create failed"),
+        onError: (err: Error) => toast.error(err?.message ?? "Create failed"),
       },
     );
   };

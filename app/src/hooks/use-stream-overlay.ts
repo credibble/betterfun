@@ -13,12 +13,12 @@ export function useStreamOverlay(potId: string, traderId: string) {
   const { signals, latest } = useTradeSignals(potId);
   const { data: rawPositions = [] } = usePositions(traderId);
 
-  const positions: OverlayPosition[] = rawPositions.map((p: Record<string, unknown>) => ({
-    marketId: (p.marketId ?? p.market_id ?? "") as string,
-    title: (p.title ?? p.marketTitle ?? "Market") as string,
-    side: (p.side === "down" ? "down" : "up") as "up" | "down",
-    size: Number(p.size ?? p.amount ?? 0),
-    currentPnl: Number(p.currentPnl ?? p.pnl ?? 0),
+  const positions: OverlayPosition[] = rawPositions.map((p) => ({
+    marketId: p.marketId,
+    title: p.marketId,
+    side: p.side,
+    size: p.contracts,
+    currentPnl: p.realizedPnl,
   }));
 
   const pnl = 0;

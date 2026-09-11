@@ -106,7 +106,7 @@ export function TraderCard({
             {tag}
           </span>
         ))}
-        {epochPhase && <EpochPhaseBadge phase={epochPhase as any} />}
+        {epochPhase && <EpochPhaseBadge phase={epochPhase} />}
       </div>
 
       {pot?.strategy && <StrategyInfoNote strategy={pot.strategy} compact className="mt-3" />}

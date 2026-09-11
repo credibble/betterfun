@@ -1,0 +1,179 @@
+specVersion: 0.0.5
+features:
+  - templateDataSources
+schema:
+  file: ./schema.graphql
+templates:
+  - kind: ethereum/contract
+    name: PotVault
+    network: somnia-testnet
+    source:
+      abi: PotVault
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/pot-vault.ts
+      entities:
+        - Pot
+        - Deposit
+        - Withdrawal
+        - Trade
+        - SetMint
+        - SetBurn
+        - FeeClaim
+      abis:
+        - name: PotVault
+          file: ./abis/PotVault.json
+      eventHandlers:
+        - event: Deposit(indexed address,uint256,uint256)
+          handler: handleDeposit
+        - event: Withdraw(indexed address,uint256,uint256)
+          handler: handleWithdraw
+        - event: SetMinted(indexed address,uint256)
+          handler: handleSetMinted
+        - event: SetBurned(indexed address,uint256)
+          handler: handleSetBurned
+        - event: OrderPlaced(indexed address,uint8,uint256,uint256,uint256)
+          handler: handleOrderPlaced
+        - event: Redeemed(uint256,uint256,uint256)
+          handler: handleRedeemed
+        - event: FeesWithdrawn(indexed address,uint256,bool)
+          handler: handleFeesWithdrawn
+        - event: PoolApproved(indexed address)
+          handler: handlePoolApproved
+        - event: PoolRevoked(indexed address)
+          handler: handlePoolRevoked
+
+dataSources:
+  - kind: ethereum/contract
+    name: EpochController
+    network: somnia-testnet
+    source:
+      address: "0xdcf29d5a725192ebae951af13651cf789062d818"
+      abi: EpochController
+      startBlock: 485577225
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/epoch-controller.ts
+      entities:
+        - Epoch
+        - Pot
+      abis:
+        - name: EpochController
+          file: ./abis/EpochController.json
+      eventHandlers:
+        - event: EpochCreated(indexed uint256,uint256,uint256)
+          handler: handleEpochCreated
+        - event: EpochWentLive(indexed uint256)
+          handler: handleEpochWentLive
+        - event: EpochWentSettling(indexed uint256)
+          handler: handleEpochWentSettling
+        - event: EpochSettled(indexed uint256)
+          handler: handleEpochSettled
+        - event: PotAddedToEpoch(indexed uint256,indexed address)
+          handler: handlePotAddedToEpoch
+
+  - kind: ethereum/contract
+    name: TraderRegistry
+    network: somnia-testnet
+    source:
+      address: "0x58bf87125d89f84bdd134133e0ff86097c44a4fa"
+      abi: TraderRegistry
+      startBlock: 485577238
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/trader-registry.ts
+      entities:
+        - Trader
+      abis:
+        - name: TraderRegistry
+          file: ./abis/TraderRegistry.json
+      eventHandlers:
+        - event: TraderRegistered(indexed address,bytes32,address,uint8)
+          handler: handleTraderRegistered
+        - event: TraderUpdated(indexed address,bytes32)
+          handler: handleTraderUpdated
+        - event: TraderVerified(indexed address,bool)
+          handler: handleTraderVerified
+        - event: TraderDeactivated(indexed address)
+          handler: handleTraderDeactivated
+
+  - kind: ethereum/contract
+    name: PotFactory
+    network: somnia-testnet
+    source:
+      address: "0x858baca13a3a516e31e8fa4d6165e95a25106c1b"
+      abi: PotFactory
+      startBlock: 485577265
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/pot-factory.ts
+      entities:
+        - Pot
+        - Epoch
+        - Trader
+      abis:
+        - name: PotFactory
+          file: ./abis/PotFactory.json
+      eventHandlers:
+        - event: PotDeployed(indexed address,indexed uint256,indexed address,uint256,uint256)
+          handler: handlePotDeployed
+
+  - kind: ethereum/contract
+    name: MetadataStore
+    network: somnia-testnet
+    source:
+      address: "0x4cd40a99e636d2c08b48305a9da29d187712ed78"
+      abi: MetadataStore
+      startBlock: 485577252
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/metadata-store.ts
+      entities:
+        - MetadataUpdate
+      abis:
+        - name: MetadataStore
+          file: ./abis/MetadataStore.json
+      eventHandlers:
+        - event: MetadataSet(indexed uint8,indexed bytes32,bytes32,uint256)
+          handler: handleMetadataSet
+
+  - kind: ethereum/contract
+    name: PlatformGovernance
+    network: somnia-testnet
+    source:
+      address: "0xa791c5a9c78e1ef785ce74db9a729a595e01a0f3"
+      abi: PlatformGovernance
+      startBlock: 485577210
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      file: ./src/platform-governance.ts
+      entities:
+        - PlatformConfig
+      abis:
+        - name: PlatformGovernance
+          file: ./abis/PlatformGovernance.json
+      eventHandlers:
+        - event: FeeSplitSet(uint8,uint8,uint8)
+          handler: handleFeeSplitSet
+        - event: TreasurySet(indexed address)
+          handler: handleTreasurySet
+        - event: MaxExposureSet(uint256)
+          handler: handleMaxExposureSet
+        - event: MinDepositSet(uint256)
+          handler: handleMinDepositSet
+        - event: MaxPotsPerTraderSet(uint256)
+          handler: handleMaxPotsPerTraderSet
+        - event: PausedSet(bool)
+          handler: handlePausedSet

@@ -35,17 +35,19 @@ export function useWsHub(channels: string[] = []) {
   // Global message handlers that invalidate queries
   useEffect(() => {
     const unsubs = [
-      wsClient.on("pot:update", (msg: any) => {
-        if (msg.potId) {
+      wsClient.on("pot:update", (msg: Record<string, unknown>) => {
+        const potId = msg.potId as string | undefined;
+        if (potId) {
           queryClient.invalidateQueries({ queryKey: ["pots"] });
-          queryClient.invalidateQueries({ queryKey: ["positions", msg.potId] });
-          queryClient.invalidateQueries({ queryKey: ["trades", msg.potId] });
+          queryClient.invalidateQueries({ queryKey: ["positions", potId] });
+          queryClient.invalidateQueries({ queryKey: ["trades", potId] });
         }
       }),
-      wsClient.on("trade:update", (msg: any) => {
-        if (msg.potId) {
-          queryClient.invalidateQueries({ queryKey: ["positions", msg.potId] });
-          queryClient.invalidateQueries({ queryKey: ["trades", msg.potId] });
+      wsClient.on("trade:update", (msg: Record<string, unknown>) => {
+        const potId = msg.potId as string | undefined;
+        if (potId) {
+          queryClient.invalidateQueries({ queryKey: ["positions", potId] });
+          queryClient.invalidateQueries({ queryKey: ["trades", potId] });
         }
       }),
       wsClient.on("epoch:update", () => {

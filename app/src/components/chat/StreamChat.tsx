@@ -54,12 +54,12 @@ export default function StreamChat({
           ) : (
             messages.map((msg, i) => {
               if (msg.type === "trade_signal") {
-                return <TradeSignalMessage key={msg.id ?? i} signal={msg as any} />;
+                return <TradeSignalMessage key={msg.id ?? i} signal={msg as { type: "trade_signal"; id?: string; trader: string; side: "buy_up" | "buy_down" | "sell"; marketId?: string; marketTitle?: string; price?: number; size?: number }} />;
               }
               if (msg.type === "system") {
                 return <SystemMessage key={msg.id ?? i} message={msg} />;
               }
-              return <ChatMessage key={msg.id ?? i} message={msg as any} />;
+              return <ChatMessage key={msg.id ?? i} message={msg as { id?: string; user: string; text: string; gif?: string; timestamp: number; color?: string }} />;
             })
           )}
         </div>

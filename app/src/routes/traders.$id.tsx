@@ -66,7 +66,7 @@ function TraderProfile() {
   const { data: pots = [] } = usePots({ traderId: id });
   const { data: epochsData } = useEpochs();
   const epochs = Array.isArray(epochsData) ? epochsData : [];
-  const epochById = new Map(epochs.map((e: any) => [e.id, e]));
+  const epochById = new Map(epochs.map((e) => [e.id, e]));
   const [notify, setNotify] = useState(false);
   const [likes, setLikes] = useState(0);
   const [liked, setLiked] = useState(false);
@@ -137,7 +137,7 @@ function TraderProfile() {
     { label: "AUM", value: <B3TR amount={t.aum ?? 0} compact iconSize={16} />, tone: "muted" },
     {
       label: "XP points",
-      value: <XP amount={traderXp(t as any)} compact iconSize={16} />,
+      value: <XP amount={traderXp(t)} compact iconSize={16} />,
       tone: "muted",
     },
     { label: "Reputation", value: `${t.reputation ?? 0}`, tone: "muted" },

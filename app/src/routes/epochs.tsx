@@ -37,7 +37,7 @@ function EpochsPage() {
   const seed = useDemoSeed();
   const fastForward = useDemoFastForward();
 
-  const epochs: EpochView[] = epochsData.map((e: any) => ({
+  const epochs: EpochView[] = epochsData.map((e) => ({
     id: e.id,
     number: e.number,
     startsAt: new Date(e.startsAt),
@@ -157,7 +157,7 @@ function EpochsPage() {
                 onClick={() =>
                   seed.mutate(undefined, {
                     onSuccess: () => toast.success("Demo epoch seeded"),
-                    onError: (err: any) => toast.error(err?.message ?? "Seed failed"),
+                    onError: (err: Error) => toast.error(err?.message ?? "Seed failed"),
                   })
                 }
                 disabled={seed.isPending}
@@ -172,7 +172,7 @@ function EpochsPage() {
                     fastForward.mutate(selected.id, {
                       onSuccess: (res) =>
                         toast.success(`Fast-forwarded → ${res.action} (${res.status})`),
-                      onError: (err: any) => toast.error(err?.message ?? "Fast-forward failed"),
+                      onError: (err: Error) => toast.error(err?.message ?? "Fast-forward failed"),
                     })
                   }
                   disabled={fastForward.isPending}
@@ -217,7 +217,7 @@ function SelectedEpochPanel({ epoch }: { epoch: EpochView }) {
             <Users className="h-3.5 w-3.5" /> Pots in this epoch
           </p>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {pots.map((p: any) => (
+            {pots.map((p) => (
               <li key={p.id}>
                 <Link
                   to="/pots/$id"

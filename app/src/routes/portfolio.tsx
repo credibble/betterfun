@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import TopBar from "@/layouts/TopBar";
 import { B3TR } from "@/components/Token";
-import { useMarkets, useMe, usePots, useEpochs } from "@/lib/queries";
+import { useMe, usePots, useEpochs } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { useMemo, type ComponentType, type ReactNode } from "react";
 
@@ -27,15 +27,14 @@ export const Route = createFileRoute("/portfolio")({
 
 function PortfolioPage() {
   const { data: user } = useMe();
-  const { data: markets = [] } = useMarkets();
   const { data: epochs } = useEpochs();
-  const activeEpoch = epochs?.find((e: any) => e.status === "live" || e.status === "upcoming");
+  const activeEpoch = epochs?.find((e) => e.status === "live" || e.status === "upcoming");
   const { data: pots = [] } = usePots(activeEpoch ? { epochId: activeEpoch.id } : undefined);
 
   const connected = !!user;
   const myPots = Array.isArray(pots) ? pots : [];
-  const totalInvested = myPots.reduce((sum: number, p: any) => sum + (p.cash ?? 0) + (p.deployed ?? 0), 0);
-  const totalNav = myPots.reduce((sum: number, p: any) => sum + (p.nav ?? 0), 0);
+  const totalInvested = myPots.reduce((sum: number, p) => sum + (p.nav ?? 0), 0);
+  const totalNav = myPots.reduce((sum: number, p) => sum + (p.nav ?? 0), 0);
 
   return (
     <div className="min-h-screen bg-background">
@@ -79,7 +78,7 @@ function PortfolioPage() {
           <Stat
             icon={ClipboardList}
             label="Open positions"
-            value={`${myPots.filter((p: any) => activeEpoch?.status === "live").length} active`}
+            value={`${myPots.filter((p) => activeEpoch?.status === "live").length} active`}
             hint="Pots currently trading"
           />
         </div>
@@ -98,7 +97,7 @@ function PortfolioPage() {
             />
           ) : (
             <div className="mt-3 space-y-2">
-              {myPots.map((pot: any) => (
+              {myPots.map((pot) => (
                 <Link
                   key={pot.id}
                   to="/pots/$id"

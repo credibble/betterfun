@@ -50,7 +50,7 @@ export function buildCommentRoutes(dataSource: DataSource) {
   });
 
   // POST /comments/:id/like — like a comment
-  router.post("/:id/like", async (req, res) => {
+  router.post("/:id/like", requireAuth, async (req, res) => {
     try {
       const id = req.params.id as string;
       await repo.increment({ id }, "likes", 1);

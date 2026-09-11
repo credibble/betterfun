@@ -1,1 +1,1 @@
-{"version":1,"failures":[{"contract":"test/EventVault.t.sol:EventVaultTest","test":"test_enter_secondDeposit_proportional"}]}
+{"version":1,"failures":[{"contract":"test/PotVault.t.sol:PotVaultTest","test":"test_claimProtocolFees"},{"contract":"test/PotVault.t.sol:PotVaultTest","test":"test_claimTraderFees"}]}

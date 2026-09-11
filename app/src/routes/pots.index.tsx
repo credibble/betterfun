@@ -35,7 +35,7 @@ function PotsPage() {
   const [selectedEpoch, setSelectedEpoch] = useState<string>("all");
 
   const filtered = useMemo(() => {
-    let items = allPots as any[];
+    let items = [...allPots];
     if (selectedEpoch !== "all") {
       items = items.filter((p) => p.epochId === selectedEpoch);
     }
@@ -85,7 +85,7 @@ function PotsPage() {
           >
             All epochs
           </button>
-          {epochs.slice(0, 4).map((e: any) => (
+          {epochs.slice(0, 4).map((e) => (
             <button
               key={e.id}
               onClick={() => setSelectedEpoch(e.id)}
@@ -115,7 +115,7 @@ function PotsPage() {
         </div>
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((p: any) => (
+          {filtered.map((p) => (
             <PotCard
               key={p.id}
               pot={{

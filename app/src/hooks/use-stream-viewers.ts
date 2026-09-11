@@ -6,7 +6,7 @@ export function useStreamViewers(roomName: string) {
     queryKey: ["stream-viewers", roomName],
     queryFn: async () => {
       try {
-        const participants = await api<any[]>(`/livekit/${roomName}/participants`);
+        const participants = await api<Array<{ id: string; name: string }>>(`/livekit/${roomName}/participants`);
         return { count: Array.isArray(participants) ? participants.length : 0 };
       } catch {
         return { count: 0 };

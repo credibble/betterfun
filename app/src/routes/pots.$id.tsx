@@ -1,15 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, CalendarDays, Lock, Copy, Check, Zap } from "lucide-react";
 import { useState, useMemo } from "react";
-import { formatUnits } from "viem";
 import TopBar from "@/layouts/TopBar";
 import { StakePanel } from "@/components/traders/StakePanel";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 import { EpochPhaseBadge } from "@/components/traders/EpochPhaseBadge";
 import { TraderAvatar } from "@/components/traders/TraderAvatar";
 import { usePot, useTrader, useEpoch, usePayout, usePotShares, useMe, useTraders, usePots } from "@/lib/queries";
-import { useVaultNav, useVaultExposure, useVaultPrice } from "@/lib/vault-hooks";
-import { TUSDC_TOKEN } from "@/lib/chains";
+import { formatNav, formatSharePrice } from "@/lib/hooks/use-vault-actions";
 import { toast } from "sonner";
 import { copyToClipboard } from "@/lib/clipboard";
 import { useWsHub } from "@/lib/use-ws-hub";
@@ -74,14 +72,10 @@ function PotDetailPage() {
   const { data: shares } = usePotShares(pot?.id ?? "");
   const { data: me } = useMe();
 
-  // On-chain vault data for metrics
-  const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
-  const { data: vaultPrice } = useVaultPrice(pot?.vaultAddress as `0x${string}` | undefined);
-  const { data: vaultExposure } = useVaultExposure(pot?.vaultAddress as `0x${string}` | undefined);
-
-  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
-  const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
-    ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)
+  // On-chain vault data from subgraph (via usePot)
+  const vaultNavUsd = pot?.nav ?? 0;
+  const vaultDeployedPct = vaultNavUsd > 0 && pot?.exposure
+    ? Math.round((pot.exposure / vaultNavUsd) * 100)
     : 0;
 
   const [copied, setCopied] = useState(false);
@@ -116,8 +110,9 @@ function PotDetailPage() {
   }
 
   const copySigner = () => {
-    if (!pot?.signerAddress) return;
-    copyToClipboard(pot.signerAddress).then((ok) => {
+    const signer = pot?.vault as string | undefined;
+    if (!signer) return;
+    copyToClipboard(signer).then((ok) => {
       setCopied(ok);
       if (!ok) toast.error("Could not copy — select the text and press Ctrl+C");
       setTimeout(() => setCopied(false), 1500);
@@ -151,7 +146,7 @@ function PotDetailPage() {
                     <h1 className="text-xl font-bold tracking-tight sm:text-2xl">{name}</h1>
                     <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                       <span>{epoch ? `Epoch #${epoch.number}` : "Epoch pot"}</span>
-                      <EpochPhaseBadge phase={epoch?.status as any} />
+                      <EpochPhaseBadge phase={epoch?.status ?? ""} />
                       <span className="rounded-md bg-secondary/60 px-2 py-0.5 text-xs font-semibold text-foreground">
                         {epoch?.status ?? "unknown"}
                       </span>
@@ -173,7 +168,7 @@ function PotDetailPage() {
                 <Metric label="In the pot" value={formatUsd(vaultNavUsd)} />
                 <Metric
                   label="LP price"
-                  value={`$${vaultPrice ? Number(formatUnits(vaultPrice, 18)).toFixed(3) : "1.000"}`}
+                  value={`$${pot?.lpPrice?.toFixed(3) ?? "1.000"}`}
                 />
                 <Metric
                   label="At work"
@@ -188,7 +183,7 @@ function PotDetailPage() {
                   onClick={copySigner}
                   className="inline-flex items-center gap-1 font-semibold text-link hover:underline"
                 >
-                  {pot.signerAddress}
+                  {pot.vault}
                   {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                 </button>
               </div>
@@ -211,7 +206,7 @@ function PotDetailPage() {
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-muted-foreground" />
                   <h2 className="text-sm font-semibold">This epoch</h2>
-                  <EpochPhaseBadge phase={epoch.status as any} />
+                  <EpochPhaseBadge phase={epoch.status ?? ""} />
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">{phaseHint(epoch.status)}</p>
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -252,10 +247,9 @@ function PotDetailPage() {
                 <h2 className="text-sm font-semibold">Settlement</h2>
                 {payout ? (
                   <div className="mt-3 space-y-2">
-                    <SettlementRow label="Per-share value" value={`$${Number(payout.perShare).toFixed(4)}`} bold />
-                    <SettlementRow label="Trader cut (gains only)" value={formatUsd(payout.traderCutUsd)} />
-                    <SettlementRow label="Protocol cut" value={formatUsd(payout.protocolCutUsd)} />
-                    <SettlementRow label="Distributed to LPs" value={formatUsd(payout.lpDistributedUsd)} />
+                    <SettlementRow label="Share price" value={`$${payout.sharePrice.toFixed(4)}`} bold />
+                    <SettlementRow label="Total NAV" value={formatUsd(payout.nav)} />
+                    <SettlementRow label="Total LP shares" value={`${(payout.totalShares / 1e18).toFixed(4)}`} />
                     {myShare && (
                       <SettlementRow label="Your claimable share" value={formatUsd(myShare.claimableUsd)} accent />
                     )}

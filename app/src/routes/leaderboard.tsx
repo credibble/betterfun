@@ -68,7 +68,7 @@ function LeaderboardPage() {
     } else if (sort === "PnL") {
       sorted.sort((a, b) => (b.pnl30 ?? 0) - (a.pnl30 ?? 0));
     } else {
-      sorted.sort((a, b) => traderXp(b as any) - traderXp(a as any));
+      sorted.sort((a, b) => traderXp(b) - traderXp(a));
     }
     return sorted;
   }, [traders, sort]);
@@ -162,7 +162,7 @@ function LeaderboardPage() {
                   {sort === "Reputation" ? (
                     <ReputationBadge score={t.reputation ?? 0} />
                   ) : sort === "XP" ? (
-                    <XP amount={traderXp(t as any)} compact iconSize={15} className="text-sm font-bold text-foreground" />
+                    <XP amount={traderXp(t)} compact iconSize={15} className="text-sm font-bold text-foreground" />
                   ) : (
                     <span
                       className={cn(
@@ -220,7 +220,7 @@ function PodiumCard({
   rank,
   sort,
 }: {
-  trader: any;
+  trader: { id: string; name: string; handle: string; avatarUrl: string; isLive: boolean; pnl30: number; winRate: number; followers: number; aum: number; reputation: number };
   rank: number;
   sort: Sort;
 }) {

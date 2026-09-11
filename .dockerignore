@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+dist
+**/dist
+*.log
+.DS_Store
+app/.next
+app/.vite
+contracts/out
+contracts/lib
+subgraph/build
+.git
+backend/.env
+backend/.env.*
+!backend/.env.docker

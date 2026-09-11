@@ -1,0 +1,17 @@
+{
+  "name": "betterfun-subgraph",
+  "version": "0.1.0",
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ betterfun-subgraph",
+    "create-local": "graph create --node http://localhost:8020/ betterfun-subgraph",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 betterfun-subgraph",
+    "deploy-docker": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 betterfun-subgraph",
+    "full-local": "npm run codegen && npm run build && npm run create-local && npm run deploy-local"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.80.0",
+    "@graphprotocol/graph-ts": "^0.35.0"
+  }
+}

@@ -27,38 +27,38 @@ export function useChat(potId: string) {
     const channel = `chat:pot:${potId}`;
     wsClient.send({ type: "subscribe", channel });
 
-    const unsubMessage = wsClient.on("chat_message", (msg: any) => {
+    const unsubMessage = wsClient.on("chat_message", (msg: Record<string, unknown>) => {
       if (msg.channel !== channel) return;
       setMessages((prev) => [
         ...prev.slice(-100),
         {
-          id: msg.id,
-          type: "message",
-          user: msg.user ?? "Anonymous",
-          text: msg.text ?? "",
-          gif: msg.gif,
-          timestamp: msg.timestamp ?? Date.now(),
-          color: msg.color,
+          id: String(msg.id ?? ""),
+          type: "message" as const,
+          user: String(msg.user ?? "Anonymous"),
+          text: String(msg.text ?? ""),
+          gif: msg.gif as string | undefined,
+          timestamp: Number(msg.timestamp ?? Date.now()),
+          color: msg.color as string | undefined,
         },
       ]);
     });
 
-    const unsubSignal = wsClient.on("trade_signal", (msg: any) => {
+    const unsubSignal = wsClient.on("trade_signal", (msg: Record<string, unknown>) => {
       if (msg.channel !== channel) return;
       setMessages((prev) => [
         ...prev.slice(-100),
         {
-          id: msg.id,
+          id: String(msg.id ?? ""),
           type: "trade_signal",
-          user: msg.trader ?? "Trader",
+          user: String(msg.trader ?? "Trader"),
           text: "",
-          timestamp: msg.timestamp ?? Date.now(),
-          trader: msg.trader,
-          side: msg.side,
-          marketId: msg.marketId,
-          marketTitle: msg.marketTitle,
-          price: msg.price,
-          size: msg.size,
+          timestamp: Number(msg.timestamp ?? Date.now()),
+          trader: msg.trader as string | undefined,
+          side: msg.side as "buy_up" | "buy_down" | "sell" | undefined,
+          marketId: msg.marketId as string | undefined,
+          marketTitle: msg.marketTitle as string | undefined,
+          price: msg.price as number | undefined,
+          size: msg.size as number | undefined,
         },
       ]);
     });

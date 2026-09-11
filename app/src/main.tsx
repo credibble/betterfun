@@ -6,7 +6,6 @@ import { WagmiProvider } from "wagmi";
 import { createAppKit } from "@reown/appkit/react";
 import { wagmiAdapter, config } from "./lib/wagmi-config";
 import { somniaTestnet } from "./lib/chains";
-import { ExchangeProvider } from "./components/ExchangeProvider";
 import "./styles.css";
 import { routeTree } from "./routeTree.gen";
 
@@ -45,9 +44,7 @@ root.render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <WagmiProvider config={config}>
-        <ExchangeProvider>
-          <RouterProvider router={router} />
-        </ExchangeProvider>
+        <RouterProvider router={router} />
       </WagmiProvider>
     </QueryClientProvider>
   </StrictMode>,

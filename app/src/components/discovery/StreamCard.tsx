@@ -15,7 +15,8 @@ export default function StreamCard({ trader, featured }: StreamCardProps) {
 
   return (
     <Link
-      to={(isLive ? `/live/${trader.id}` : `/traders/${trader.id}`) as any}
+      to={isLive ? "/live/$id" : "/traders/$id"}
+      params={{ id: trader.id }}
       className={cn(
         "group relative overflow-hidden rounded-xl border bg-card transition-all hover:shadow-lg hover:ring-2 hover:ring-primary/20",
         featured && "col-span-2 row-span-2"

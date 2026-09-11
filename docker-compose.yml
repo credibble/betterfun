@@ -1,0 +1,129 @@
+services:
+  # ── Infrastructure ─────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: betterfun
+      POSTGRES_PASSWORD: betterfun_dev
+      POSTGRES_DB: betterfun
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U betterfun"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Graph Node (subgraph) ──────────────────────────────────────────────────
+  graph-node-postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: graph-node
+      POSTGRES_PASSWORD: graph-node
+      POSTGRES_DB: graph-node
+    volumes:
+      - gn-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U graph-node"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  graph-node-ipfs:
+    image: ipfs/kubo:v0.24.0
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs-data:/data/ipfs
+
+  graph-node:
+    image: graphprotocol/graph-node:v0.35.0
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # GraphQL HTTP
+      - "8020:8020"   # JSON-RPC (admin)
+      - "8030:8030"   # Indexing status API
+    environment:
+      postgres_host: graph-node-postgres
+      postgres_user: graph-node
+      postgres_pass: graph-node
+      postgres_db: graph-node
+      ipfs: 'ipfs:5001'
+      ethereum: 'somnia-testnet:https://dream-rpc.somnia.network'
+      GRAPH_LOG: info
+      ETHEREUM_REORG_THRESHOLD: 0
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Waiting for postgres..."
+        for i in $$(seq 1 30); do
+          if nc -z graph-node-postgres 5432 2>/dev/null; then break; fi
+          echo "  attempt $$i/30..."
+          sleep 2
+        done
+        echo "Waiting for ipfs..."
+        for i in $$(seq 1 15); do
+          if nc -z ipfs 5001 2>/dev/null; then break; fi
+          echo "  attempt $$i/15..."
+          sleep 2
+        done
+        echo "Starting graph-node..."
+        exec graph-node \
+          --postgres-host $$postgres_host \
+          --postgres-user $$postgres_user \
+          --postgres-pass $$postgres_pass \
+          --postgres-db $$postgres_db \
+          --ipfs $$ipfs \
+          --ethereum-rpc $$ethereum \
+          --node-id 0 \
+          --store-debug-info
+    depends_on:
+      graph-node-postgres:
+        condition: service_healthy
+      graph-node-ipfs:
+        condition: service_started
+
+  # ── Backend ────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    env_file:
+      - ./backend/.env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://betterfun:betterfun_dev@postgres:5432/betterfun
+      REDIS_URL: redis://redis:6379
+
+volumes:
+  pgdata:
+  redisdata:
+  gn-pgdata:
+  ipfs-data:

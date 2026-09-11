@@ -4,8 +4,6 @@ import { Bell, BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useTrader, usePots, usePositions, useIsFollowing, useFollow, useUnfollow } from "@/lib/queries";
-import { useVaultNav, useVaultPrice } from "@/lib/vault-hooks";
-import { formatUnits } from "viem";
 import StreamLayout from "@/layouts/StreamLayout";
 import LiveSidebar from "@/components/sidebar/LiveSidebar";
 import StreamPlayer from "@/components/stream/StreamPlayer";
@@ -46,8 +44,6 @@ function LivePage() {
 
   const { data: viewerData } = useStreamViewers(room);
   const { positions, pnl } = useStreamOverlay(pot?.id ?? "", id);
-  const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
-  const { data: vaultPrice } = useVaultPrice(pot?.vaultAddress as `0x${string}` | undefined);
   const { data: rawPositions = [] } = usePositions(pot?.id ?? "");
 
   const isFollowing = followingData?.following ?? false;
@@ -118,14 +114,16 @@ function LivePage() {
         <div className="rounded-xl border bg-card p-4">
           <h3 className="text-sm font-semibold mb-3">Open Positions</h3>
           <PositionTable
-            positions={rawPositions.map((p: any) => ({
-              id: p.id ?? p.marketId,
-              marketId: p.marketId ?? p.market_id ?? "",
-              symbol: p.symbol ?? p.marketTitle ?? "Market",
-              side: p.side ?? "up",
-              contracts: Number(p.size ?? p.amount ?? 0),
-              avgPrice: Number(p.avgPrice ?? p.entryPrice ?? 0),
+            positions={rawPositions.map((p) => ({
+              id: p.id,
+              marketId: p.marketId,
+              symbol: p.marketId,
+              side: p.side,
+              contracts: p.contracts,
+              avgPrice: p.avgPrice,
               status: "open",
+              realizedPnl: p.realizedPnl,
+              win: p.win,
             }))}
           />
         </div>
@@ -154,8 +152,8 @@ function LivePage() {
       {pot && (
         <StakePanel
           potId={pot.id}
-          nav={vaultNav != null ? Number(formatUnits(vaultNav, 6)) : 0}
-          lpPrice={vaultPrice != null ? Number(formatUnits(vaultPrice, 18)) : 1}
+          nav={pot?.nav ?? 0}
+          lpPrice={pot?.lpPrice ?? 1}
           yourStake={0}
           totalStakers={0}
         />

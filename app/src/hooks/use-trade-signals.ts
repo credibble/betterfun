@@ -24,20 +24,20 @@ export function useTradeSignals(potId: string) {
     const channel = `pot:${potId}`;
     wsClient.send({ type: "subscribe", channel });
 
-    const unsub = wsClient.on("trade_signal", (msg: any) => {
+    const unsub = wsClient.on("trade_signal", (msg: Record<string, unknown>) => {
       if (msg.channel !== channel && msg.potId !== potId) return;
 
       const signal: TradeSignal = {
-        id: msg.id,
+        id: String(msg.id ?? ""),
         type: "trade_signal",
-        trader: msg.trader ?? "Trader",
-        potId: msg.potId ?? potId,
-        side: msg.side,
-        marketId: msg.marketId,
-        marketTitle: msg.marketTitle,
-        price: msg.price,
-        size: msg.size,
-        timestamp: msg.timestamp ?? Date.now(),
+        trader: String(msg.trader ?? "Trader"),
+        potId: String(msg.potId ?? potId),
+        side: msg.side as TradeSignal["side"],
+        marketId: msg.marketId as string | undefined,
+        marketTitle: msg.marketTitle as string | undefined,
+        price: msg.price as number | undefined,
+        size: msg.size as number | undefined,
+        timestamp: Number(msg.timestamp ?? Date.now()),
       };
 
       setSignals((prev) => [...prev.slice(-50), signal]);

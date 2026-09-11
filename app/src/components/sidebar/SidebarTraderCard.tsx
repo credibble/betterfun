@@ -13,7 +13,8 @@ export default function SidebarTraderCard({ trader }: SidebarTraderCardProps) {
 
   return (
     <Link
-      to={`/live/${trader.id}` as any}
+      to="/live/$id"
+      params={{ id: trader.id }}
       className={cn(
         "flex items-center gap-3 rounded-lg p-2 transition-colors hover:bg-accent",
         "data-[active]:bg-accent"

@@ -73,8 +73,9 @@ export function CashoutDialog({
       await onCashout(position.marketId, side, amount);
       setSizeUsd("");
       onOpenChange(false);
-    } catch (err: any) {
-      setError(err?.message ?? "Cashout failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Cashout failed";
+      setError(message);
     } finally {
       setLoading(false);
     }

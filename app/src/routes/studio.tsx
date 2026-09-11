@@ -10,7 +10,6 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatUnits } from "viem";
 import StreamLayout from "@/layouts/StreamLayout";
 import LiveSidebar from "@/components/sidebar/LiveSidebar";
 import StreamPlayer from "@/components/stream/StreamPlayer";
@@ -30,11 +29,9 @@ import {
   useTrade,
   usePositions,
   useTrades,
-  useRestMarkets,
+  useMarkets,
   useSetLive,
 } from "@/lib/queries";
-import { useVaultNav, useVaultExposure, useVaultPrice, useVaultPositions } from "@/lib/vault-hooks";
-import { TUSDC_TOKEN } from "@/lib/chains";
 import { cn } from "@/lib/utils";
 import { useWsHub } from "@/lib/use-ws-hub";
 
@@ -87,7 +84,16 @@ function StudioPage() {
   const epochs = useMemo(() => (Array.isArray(epochsData) ? epochsData : []), [epochsData]);
   const allPots = useMemo(() => (Array.isArray(potsData) ? potsData : []), [potsData]);
 
-  const trader = myTrader ?? null;
+  const trader = myTrader
+    ? {
+        id: myTrader.id as string,
+        name: myTrader.name as string,
+        handle: myTrader.handle as string,
+        avatarUrl: (myTrader.avatarUrl as string) ?? "",
+        isLive: (myTrader.isLive as boolean) ?? false,
+        followers: (myTrader.followers as number) ?? 0,
+      }
+    : null;
   const myPots = useMemo(
     () => (trader ? allPots.filter((p) => p.traderId === trader.id) : []),
     [allPots, trader],
@@ -113,7 +119,7 @@ function StudioPage() {
   const toggleLive = (next: boolean) => {
     setLive(next);
     setLiveMutation.mutate(next, {
-      onError: (err: any) => {
+      onError: (err: Error) => {
         toast.error(err?.message ?? "Failed to update live status");
         setLive(!next);
       },
@@ -283,16 +289,16 @@ function OverviewSection({
   live,
   onGoTrade,
 }: {
-  trader: any;
-  pots: any[];
-  epochs: any[];
+  trader: { id: string; name: string; handle: string };
+  pots: { id: string; epochId?: string; nav: number; lpPrice?: number; totalStakers?: number; yourStake?: number; strategy?: { title: string } }[];
+  epochs: { id: string; number: number; status: string }[];
   live: boolean;
   onGoTrade: () => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const potTvl = pots.reduce((s: number, p: any) => s + Number(p.nav), 0);
-  const totalStakers = pots.reduce((s: number, p: any) => s + (p.totalStakers ?? 0), 0);
-  const lpPrice = pots.length > 0 ? pots.reduce((s: number, p: any) => s + Number(p.lpPrice ?? 1), 0) / pots.length : 1;
+  const potTvl = pots.reduce((s: number, p) => s + Number(p.nav), 0);
+  const totalStakers = pots.reduce((s: number, p) => s + (p.totalStakers ?? 0), 0);
+  const lpPrice = pots.length > 0 ? pots.reduce((s: number, p) => s + Number(p.lpPrice ?? 1), 0) / pots.length : 1;
 
   return (
     <div className="space-y-5">
@@ -300,7 +306,7 @@ function OverviewSection({
         <StatCard label="NAV" value={formatUsd(potTvl)} hint={`${pots.length} pot${pots.length === 1 ? "" : "s"}`} />
         <StatCard label="LP Price" value={`$${lpPrice.toFixed(4)}`} hint="Average across pots" />
         <StatCard label="Total Stakers" value={fmtFollowers(totalStakers)} hint="People staking in your pots" />
-        <StatCard label="Your Stake" value={formatUsd(pots.reduce((s: number, p: any) => s + (p.yourStake ?? 0), 0))} hint="Your deposited capital" />
+        <StatCard label="Your Stake" value={formatUsd(pots.reduce((s: number, p) => s + (p.yourStake ?? 0), 0))} hint="Your deposited capital" />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -327,7 +333,7 @@ function OverviewSection({
   );
 }
 
-function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => void }) {
+function CreatePotForm({ epochs, onCreated }: { epochs: { id: string; status: string; number: number }[]; onCreated: () => void }) {
   const stakeEpoch = epochs.find((e) => e.status === "upcoming") ?? epochs[0];
   const [epochId, setEpochId] = useState(stakeEpoch?.id ?? "");
   const [title, setTitle] = useState("");
@@ -360,7 +366,7 @@ function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => 
           setFocus("");
           onCreated();
         },
-        onError: (err: any) => toast.error(err?.message ?? "Failed to create pot"),
+        onError: (err: Error) => toast.error(err?.message ?? "Failed to create pot"),
       },
     );
   };
@@ -454,7 +460,7 @@ function CreatePotForm({ epochs, onCreated }: { epochs: any[]; onCreated: () => 
   );
 }
 
-function PotsList({ pots, epochs, handle, emptyHint }: { pots: any[]; epochs: any[]; handle?: string; emptyHint: string }) {
+function PotsList({ pots, epochs, handle, emptyHint }: { pots: { id: string; epochId?: string; strategy?: { title: string }; nav: number }[]; epochs: { id: string; status: string; number: number }[]; handle?: string; emptyHint: string }) {
   if (pots.length === 0) {
     return (
       <p className="mt-3 rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted-foreground">
@@ -506,8 +512,8 @@ function TradeSection({
   setStreamTitle,
   setSetupOpen,
 }: {
-  trader: any;
-  pot: any;
+  trader: { id: string; name: string };
+  pot: { id: string; strategy?: { title: string }; nav?: number; exposure?: number } | null;
   epochStatus: string;
   live: boolean;
   onToggleLive: (next: boolean) => void;
@@ -520,19 +526,14 @@ function TradeSection({
   const [searchQuery, setSearchQuery] = useState("");
 
   const trade = useTrade();
-  const { data: markets = [] } = useRestMarkets();
+  const { data: markets = [] } = useMarkets();
 
-  const { data: vaultNav } = useVaultNav(pot?.vaultAddress as `0x${string}` | undefined);
-  const { data: vaultExposure } = useVaultExposure(pot?.vaultAddress as `0x${string}` | undefined);
-  const { data: vaultPositions } = useVaultPositions(pot?.vaultAddress as `0x${string}` | undefined);
-  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
-  const vaultDeployedPct = vaultNavUsd > 0 && vaultExposure
-    ? Math.round((Number(formatUnits(vaultExposure, TUSDC_TOKEN.decimals)) / vaultNavUsd) * 100)
+  // Vault data from subgraph (via pot object)
+  const vaultNavUsd = pot?.nav ?? 0;
+  const vaultDeployedPct = vaultNavUsd > 0 && pot?.exposure
+    ? Math.round((pot.exposure / vaultNavUsd) * 100)
     : 0;
-  const vaultIdle = vaultNav && vaultPositions
-    ? vaultNav - (vaultPositions[0] < vaultPositions[1] ? vaultPositions[0] : vaultPositions[1])
-    : 0n;
-  const vaultIdleUsd = Number(formatUnits(vaultIdle, TUSDC_TOKEN.decimals));
+  const vaultIdleUsd = vaultNavUsd - (pot?.exposure ?? 0);
   const allMarkets = Array.isArray(markets) ? markets : [];
   const tradingMarkets = allMarkets.filter(
     (m) => m.status === "trading" || m.status === "locked",
@@ -547,7 +548,7 @@ function TradeSection({
     const q = searchQuery.toLowerCase();
     return (
       m.symbol?.toLowerCase().includes(q) ||
-      m.question?.toLowerCase().includes(q) ||
+      (m as { question?: string }).question?.toLowerCase().includes(q) ||
       m.asset?.toLowerCase().includes(q)
     );
   });
@@ -562,12 +563,12 @@ function TradeSection({
       return;
     }
     trade.mutate(
-      { potId: pot.id, marketId, side: input.side, sizeUsd: input.sizeUsd, maxPrice: input.maxPrice },
+      { pool: marketId as `0x${string}`, side: input.side, sizeUsd: input.sizeUsd, maxPrice: input.maxPrice },
       {
-        onSuccess: (res) => {
-          toast.success(`${input.side.replace("_", " ")}: ${res.filled.toFixed(2)} filled @ $${res.price.toFixed(3)}`);
+        onSuccess: () => {
+          toast.success(`${input.side.replace("_", " ")}: order placed`);
         },
-        onError: (err: any) => toast.error(err?.message ?? "Trade failed"),
+        onError: (err: Error) => toast.error(err?.message ?? "Trade failed"),
       },
     );
   };
@@ -665,8 +666,8 @@ function TradeSection({
                 <MarketCard
                   key={m.id}
                   symbol={m.symbol ?? ""}
-                  question={m.question}
-                  strike={m.strike}
+                  question={(m as { question?: string }).question ?? m.symbol}
+                  strike={(m as { strike?: number }).strike?.toString()}
                   expiryMs={expiryMs}
                   upPrice={Number(m.upPrice)}
                   downPrice={Number(m.downPrice)}
@@ -686,11 +687,12 @@ function TradeSection({
             <div className="rounded-xl border border-border bg-card p-4">
               <h4 className="mb-2 text-sm font-semibold">Open Positions</h4>
               <PositionTable
-                positions={(Array.isArray(positions) ? positions : []).map((p: any) => {
+                positions={(Array.isArray(positions) ? positions : []).map((p) => {
                   const mkt = tradingMarkets.find((m) => m.id === p.marketId);
                   return {
                     ...p,
-                    symbol: mkt?.symbol ?? p.symbol ?? "Unknown",
+                    symbol: mkt?.symbol ?? "Unknown",
+                    status: "open",
                   };
                 })}
                 currentPrices={Object.fromEntries(
@@ -701,13 +703,12 @@ function TradeSection({
                 )}
                 onCashout={async (marketId, side, sizeUsd) => {
                   if (!pot) throw new Error("No tradable pot");
-                  const res = await trade.mutateAsync({
-                    potId: pot.id,
-                    marketId,
+                  await trade.trade({
+                    pool: marketId as `0x${string}`,
                     side,
                     sizeUsd,
                   });
-                  toast.success(`Cashout: ${res.filled.toFixed(2)} filled @ $${res.price.toFixed(3)}`);
+                  toast.success(`Cashout: order placed`);
                 }}
               />
             </div>
@@ -728,7 +729,7 @@ function TradeSection({
                     </tr>
                   </thead>
                   <tbody>
-                    {(Array.isArray(trades) ? trades : []).slice(0, 10).map((t: any) => {
+                    {(Array.isArray(trades) ? trades : []).slice(0, 10).map((t) => {
                       const mkt = tradingMarkets.find((m) => m.id === t.marketId);
                       return (
                         <tr key={t.id} className="border-t border-border/30">
@@ -736,7 +737,7 @@ function TradeSection({
                           <td className={cn("py-1.5 pr-2 font-semibold capitalize", t.side?.includes("up") ? "text-up" : "text-down")}>
                             {t.side?.replace("_", " ") ?? "—"}
                           </td>
-                          <td className="py-1.5 pr-2 text-right tabular-nums">{Number(t.quantity).toFixed(2)}</td>
+                          <td className="py-1.5 pr-2 text-right tabular-nums">{Number(t.size).toFixed(2)}</td>
                           <td className="py-1.5 text-right tabular-nums">${Number(t.price).toFixed(3)}</td>
                         </tr>
                       );
@@ -759,7 +760,7 @@ function TradeSection({
           {selectedMarket ? (
             <TradePanel
               symbol={selectedMarket.symbol ?? ""}
-              question={selectedMarket.question}
+              question={(selectedMarket as { question?: string }).question ?? selectedMarket.symbol}
               upPrice={Number(selectedMarket.upPrice)}
               downPrice={Number(selectedMarket.downPrice)}
               cash={vaultIdleUsd}
@@ -778,7 +779,7 @@ function TradeSection({
   );
 }
 
-function FollowersSection({ trader }: { trader: any }) {
+function FollowersSection({ trader }: { trader: { name: string; followers?: number } }) {
   return (
     <div className="space-y-4">
       <div>

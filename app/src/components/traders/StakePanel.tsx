@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { useAccount } from "wagmi";
+import { useReadContract } from "wagmi";
 import { TrendingUp, Lock, Wallet } from "lucide-react";
-import { formatUnits } from "viem";
+import { parseUnits, formatUnits } from "viem";
 import { ActionPairTabs } from "@/components/ActionPairTabs";
-import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch, useSyncVaultDeposit } from "@/lib/queries";
-import { useVaultDeposit, useVaultWithdraw, useVaultShares, useVaultNav, useVaultPrice, useVaultTotalSupply, formatNav, formatSharePrice } from "@/lib/vault-hooks";
-import { TUSDC_TOKEN } from "@/lib/chains";
+import { usePots, usePotShares, useMe, usePayout, useClaimPayout, usePot, useEpoch } from "@/lib/queries";
+import { useVaultDeposit, useVaultWithdraw, formatNav, formatSharePrice } from "@/lib/hooks/use-vault-actions";
+import { ADDRESSES } from "@/lib/contracts";
+import { PotVaultAbi } from "@/lib/contracts";
 import { StrategyInfoNote } from "@/components/traders/StrategyInfoNote";
 
 type Trader = { id: string; name: string };
@@ -35,7 +37,7 @@ export function StakePanel({
 }: {
   trader: Trader;
   preferredEpochId?: string;
-  pot?: any;
+  pot?: { id: string; vault?: string; nav?: number; lpPrice?: number; totalShares?: number; traderId: string; epochId: string; strategy?: { title: string; note?: string; risk?: "conservative" | "balanced" | "aggressive"; focus?: string[] } } | null;
 }) {
   const { address } = useAccount();
   const { data: pots } = usePots();
@@ -49,7 +51,7 @@ export function StakePanel({
 
   const { data: me } = useMe();
   const { data: shares } = usePotShares(pot?.id);
-  const { data: payout } = usePayout(pot?.id ?? "");
+  const { data: payout } = usePayout(pot?.vault as `0x${string}` | undefined);
   const { data: epoch } = useEpoch(preferredEpochId ?? pot?.epochId ?? "");
 
   const myShare = shares?.find((s) => me?.id && s.userId === me.id);
@@ -59,24 +61,26 @@ export function StakePanel({
   const [amount, setAmount] = useState(0);
   const [mode, setMode] = useState<"stake" | "unstake" | "claim">("stake");
 
-  const { deposit, isPending: depositPending } = useVaultDeposit(pot?.vaultAddress);
-  const { withdraw, isPending: withdrawPending } = useVaultWithdraw(pot?.vaultAddress);
-  const claimMutation = useClaimPayout();
-  const syncDepositMutation = useSyncVaultDeposit();
+  const { deposit, isPending: depositPending } = useVaultDeposit(pot?.vault as `0x${string}` | undefined);
+  const { withdraw, isPending: withdrawPending } = useVaultWithdraw(pot?.vault as `0x${string}` | undefined);
+  const claimMutation = useClaimPayout(pot?.vault as `0x${string}` | undefined);
 
-  // On-chain vault data
-  const { data: vaultNav } = useVaultNav(pot?.vaultAddress);
-  const { data: vaultPrice } = useVaultPrice(pot?.vaultAddress);
-  const { data: myVaultShares } = useVaultShares(address, pot?.vaultAddress);
-  const { data: totalSupply } = useVaultTotalSupply(pot?.vaultAddress);
+  // Vault data from subgraph (via pot object)
+  const vaultNavUsd = pot?.nav ?? 0;
+  const totalSupply = pot?.totalShares ?? 0;
 
-  const vaultNavUsd = vaultNav ? Number(formatUnits(vaultNav, TUSDC_TOKEN.decimals)) : 0;
-  const myVaultShareBalance = myVaultShares ? Number(formatUnits(myVaultShares, 18)) : 0;
-  const myVaultValue = vaultPrice && myVaultShares
-    ? Number(formatUnits(myVaultShares, 18)) * Number(formatUnits(vaultPrice, 18))
-    : 0;
+  // User's individual LP share balance (per-user, not in subgraph)
+  const { data: myVaultShares } = useReadContract({
+    address: (pot?.vault ?? ADDRESSES.POT_VAULT) as `0x${string}`,
+    abi: PotVaultAbi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    query: { enabled: !!address && !!pot?.vault },
+  });
+  const myVaultShareBalance = myVaultShares && typeof myVaultShares === "bigint" ? Number(formatUnits(myVaultShares, 18)) : 0;
+  const myVaultValue = myVaultShareBalance * (pot?.lpPrice ?? 1);
 
-  const hasVault = pot?.vaultAddress && pot.vaultAddress !== "0x0000000000000000000000000000000000000000";
+  const hasVault = !!pot?.vault && pot.vault !== "0x0000000000000000000000000000000000000000";
 
   const onMint = async () => {
     toast.info("Use the tUSDC faucet to mint test tokens");
@@ -103,20 +107,9 @@ export function StakePanel({
       const txHash = await deposit(amount);
       toast.success(`Deposited ${formatUsd(amount)} into the vault`);
       setAmount(0);
-
-      // Sync the on-chain deposit to the backend so settlement can compute claimableUsd
-      if (pot?.id && txHash) {
-        syncDepositMutation.mutate(
-          { potId: pot.id, txHash },
-          {
-            onError: (err: any) => {
-              console.error("Failed to sync vault deposit:", err);
-            },
-          },
-        );
-      }
-    } catch (err: any) {
-      toast.error(err?.message ?? "Deposit failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Deposit failed";
+      toast.error(message);
     }
   };
 
@@ -135,7 +128,7 @@ export function StakePanel({
     }
     const sharesToWithdraw = amount > 0
       ? BigInt(Math.floor(amount * 1e18))
-      : myVaultShares ?? 0n;
+      : (typeof myVaultShares === "bigint" ? myVaultShares : 0n);
     if (sharesToWithdraw <= 0n) {
       toast.error("Nothing to withdraw");
       return;
@@ -144,8 +137,9 @@ export function StakePanel({
       await withdraw(sharesToWithdraw);
       toast.success("Withdrawn from vault");
       setAmount(0);
-    } catch (err: any) {
-      toast.error(err?.message ?? "Withdraw failed");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Withdraw failed";
+      toast.error(message);
     }
   };
 
@@ -162,14 +156,15 @@ export function StakePanel({
       toast.error("Nothing to claim");
       return;
     }
-    const userAddress = (me?.walletAddress ?? address) as `0x${string}`;
-    claimMutation.mutate(
-      { potId: pot.id, userAddress },
-      {
-        onSuccess: () => toast.success(`Claimed ${formatUsd(claimable)}`),
-        onError: (err: any) => toast.error(err?.message ?? "Claim failed"),
-      },
-    );
+    // Redeem outcome tokens (outcomeId 0 = YES side) for the claimable amount
+    const claimAmount = BigInt(Math.floor(claimable * 1e6));
+    claimMutation.claim(
+      { outcomeId: 0n, amount: claimAmount },
+    ).then(() => {
+      toast.success(`Claimed ${formatUsd(claimable)}`);
+    }).catch((err: Error) => {
+      toast.error(err?.message ?? "Claim failed");
+    });
   };
 
   const tabs =
@@ -198,14 +193,14 @@ export function StakePanel({
             <div className="flex items-center justify-between">
               <span className="font-semibold text-foreground">{potPhase(epoch?.status)}</span>
               <span className="rounded-md bg-primary/15 px-1.5 py-0.5 font-bold text-primary">
-                NAV {formatNav(vaultNav)}
+                NAV {formatNav(vaultNavUsd)}
               </span>
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
               <span>
                 Share price{" "}
                 <span className="font-semibold text-foreground">
-                  {formatSharePrice(vaultPrice)}
+                  {formatSharePrice(vaultNavUsd, totalSupply)}
                 </span>
               </span>
               <span>
@@ -223,18 +218,18 @@ export function StakePanel({
               <span>
                 Total LP{" "}
                 <span className="font-semibold text-foreground">
-                  {totalSupply ? Number(formatUnits(totalSupply, 18)).toFixed(2) : "0"}
+                  {totalSupply > 0 ? (totalSupply / 1e18).toFixed(2) : "0"}
                 </span>
               </span>
             </div>
             <div className="mt-2 truncate text-muted-foreground">
               Vault{" "}
               <span className="font-semibold text-link">
-                {pot?.vaultAddress?.slice(0, 6)}…{pot?.vaultAddress?.slice(-4)}
+                {pot?.vault?.slice(0, 6)}…{pot?.vault?.slice(-4)}
               </span>
             </div>
           </div>
-          {pot && <StrategyInfoNote strategy={pot.strategy} compact />}
+          {pot?.strategy && <StrategyInfoNote strategy={{ title: pot.strategy.title, note: pot.strategy.note ?? "", risk: pot.strategy.risk ?? "balanced", focus: pot.strategy.focus ?? [] }} compact />}
         </div>
       ) : (
         <div className="mb-4 rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
@@ -361,16 +356,16 @@ export function StakePanel({
       {payout && mode === "claim" && (
         <div className="mt-3 space-y-1 rounded-lg border border-border bg-secondary/30 p-3 text-xs text-muted-foreground">
           <p className="flex justify-between">
-            <span>Per-share value</span>
-            <span className="num font-semibold text-foreground">${Number(payout.perShare).toFixed(4)}</span>
+            <span>Share price</span>
+            <span className="num font-semibold text-foreground">${payout.sharePrice.toFixed(4)}</span>
           </p>
           <p className="flex justify-between">
-            <span>Trader cut</span>
-            <span className="num font-semibold text-foreground">{formatUsd(payout.traderCutUsd)}</span>
+            <span>Total NAV</span>
+            <span className="num font-semibold text-foreground">{formatUsd(payout.nav)}</span>
           </p>
           <p className="flex justify-between">
-            <span>LP distributed</span>
-            <span className="num font-semibold text-foreground">{formatUsd(payout.lpDistributedUsd)}</span>
+            <span>Total LP shares</span>
+            <span className="num font-semibold text-foreground">{(payout.totalShares / 1e18).toFixed(4)}</span>
           </p>
         </div>
       )}

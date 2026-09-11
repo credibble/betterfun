@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useDeposit, useWithdraw } from "@/lib/queries";
+import { useVaultDeposit, useVaultWithdraw } from "@/lib/hooks/use-vault-actions";
 import StakeStats from "./StakeStats";
 
 type StakePanelProps = {
   potId: string;
+  vaultAddress?: `0x${string}`;
   nav?: number;
   lpPrice?: number;
   yourStake?: number;
@@ -18,6 +19,7 @@ type StakePanelProps = {
 
 export default function StakePanel({
   potId,
+  vaultAddress,
   nav = 0,
   lpPrice = 1,
   yourStake = 0,
@@ -25,25 +27,20 @@ export default function StakePanel({
   className,
 }: StakePanelProps) {
   const [amount, setAmount] = useState("");
-  const depositMutation = useDeposit();
-  const withdrawMutation = useWithdraw();
+  const { deposit, isPending: depositPending } = useVaultDeposit(vaultAddress);
+  const { withdraw, isPending: withdrawPending } = useVaultWithdraw(vaultAddress);
 
   const handleDeposit = () => {
     const value = parseFloat(amount);
     if (isNaN(value) || value <= 0) return;
-    depositMutation.mutate(
-      { potId, amountUsd: value },
-      { onSuccess: () => setAmount("") }
-    );
+    deposit(value).then(() => setAmount(""));
   };
 
   const handleWithdraw = () => {
     const value = parseFloat(amount);
     if (isNaN(value) || value <= 0) return;
-    withdrawMutation.mutate(
-      { potId, amountUsd: value },
-      { onSuccess: () => setAmount("") }
-    );
+    const shares = BigInt(Math.floor(value * 1e18));
+    withdraw(shares).then(() => setAmount(""));
   };
 
   return (
@@ -78,10 +75,10 @@ export default function StakePanel({
               />
               <Button
                 onClick={handleDeposit}
-                disabled={!amount || depositMutation.isPending}
+                disabled={!amount || depositPending}
                 size="sm"
               >
-                {depositMutation.isPending ? "Depositing..." : "Deposit"}
+                {depositPending ? "Depositing..." : "Deposit"}
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground">
@@ -102,11 +99,11 @@ export default function StakePanel({
               />
               <Button
                 onClick={handleWithdraw}
-                disabled={!amount || withdrawMutation.isPending}
+                disabled={!amount || withdrawPending}
                 size="sm"
                 variant="outline"
               >
-                {withdrawMutation.isPending ? "Withdrawing..." : "Withdraw"}
+                {withdrawPending ? "Withdrawing..." : "Withdraw"}
               </Button>
             </div>
             <p className="text-[10px] text-muted-foreground">

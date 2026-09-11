@@ -28,19 +28,19 @@ function TradersPage() {
   const { data } = useTraders();
   const allTraders = Array.isArray(data) ? data : [];
 
-  let list = [...allTraders] as any[];
+  let list = [...allTraders];
   if (tab === "Reputation") {
-    list.sort((a: any, b: any) => (b.reputation ?? 0) - (a.reputation ?? 0));
+    list.sort((a, b) => (b.reputation ?? 0) - (a.reputation ?? 0));
   } else if (tab === "Live now") {
-    list = list.filter((t: any) => t.isLive);
+    list = list.filter((t) => t.isLive);
   } else {
-    list.sort((a: any, b: any) => (b.pnl30 ?? 0) - (a.pnl30 ?? 0));
+    list.sort((a, b) => (b.pnl30 ?? 0) - (a.pnl30 ?? 0));
   }
 
   const q = query.trim().toLowerCase();
   if (q) {
     list = list.filter(
-      (t: any) =>
+      (t) =>
         t.name.toLowerCase().includes(q) ||
         t.handle.toLowerCase().includes(q) ||
         (t.tags ?? []).some((tag: string) => tag.toLowerCase().includes(q)),
@@ -109,7 +109,7 @@ function TradersPage() {
           </div>
         ) : (
           <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {list.map((t: any) => (
+            {list.map((t) => (
               <TraderCard key={t.id} trader={t} />
             ))}
           </div>

@@ -1,7 +1,7 @@
 const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 const WS_BASE = import.meta.env.VITE_WS_URL ?? "ws://localhost:3001";
 
-type MessageHandler = (msg: any) => void;
+type MessageHandler = (msg: Record<string, unknown>) => void;
 
 export class WsClient {
   private ws: WebSocket | null = null;
@@ -17,7 +17,7 @@ export class WsClient {
 
     this.ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data);
+        const msg = JSON.parse(event.data) as Record<string, unknown>;
         const type = msg.type as string;
         this.handlers.get(type)?.forEach((h) => h(msg));
         this.handlers.get("*")?.forEach((h) => h(msg));
@@ -47,7 +47,7 @@ export class WsClient {
     return () => this.handlers.get(type)?.delete(handler);
   }
 
-  send(msg: any) {
+  send(msg: Record<string, unknown>) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(msg));
     }

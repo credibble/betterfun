@@ -1,0 +1,143 @@
+type Epoch @entity(immutable: true) {
+  id: ID! # epochId as string
+  startsAt: BigInt!
+  endsAt: BigInt!
+  state: EpochState!
+  pots: [Pot!]! @derivedFrom(field: "epoch")
+  createdAt: BigInt!
+}
+
+enum EpochState {
+  UPCOMING
+  LIVE
+  SETTLING
+  SETTLED
+}
+
+type Trader @entity(immutable: false) {
+  id: Bytes! # address
+  metadataCID: Bytes!
+  payoutAddress: Bytes!
+  traderType: TraderType!
+  verified: Boolean!
+  active: Boolean!
+  potCount: BigInt!
+  pots: [Pot!]! @derivedFrom(field: "trader")
+  registeredAt: BigInt!
+  updatedAt: BigInt!
+}
+
+enum TraderType {
+  TRADER
+  ALGO
+  INSTITUTIONAL
+}
+
+type Pot @entity(immutable: false) {
+  id: Bytes! # vault address
+  vault: Bytes!
+  epoch: Epoch
+  trader: Trader!
+  exposureLimit: BigInt!
+  index: BigInt!
+  halted: Boolean!
+  nav: BigInt!
+  totalShares: BigInt!
+  totalDeposits: BigInt!
+  exposure: BigInt!
+  approvedPools: [Bytes!]!
+  deposits: [Deposit!]! @derivedFrom(field: "pot")
+  withdrawals: [Withdrawal!]! @derivedFrom(field: "pot")
+  trades: [Trade!]! @derivedFrom(field: "pot")
+  createdAt: BigInt!
+}
+
+type Deposit @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  lp: Bytes!
+  collateralIn: BigInt!
+  sharesOut: BigInt!
+  timestamp: BigInt!
+}
+
+type Withdrawal @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  lp: Bytes!
+  sharesBurned: BigInt!
+  collateralOut: BigInt!
+  timestamp: BigInt!
+}
+
+type Trade @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  pool: Bytes!
+  side: Side!
+  tick: BigInt!
+  size: BigInt!
+  orderId: BigInt!
+  timestamp: BigInt!
+}
+
+enum Side {
+  BUY_YES
+  SELL_YES
+  BUY_NO
+  SELL_NO
+}
+
+type SetMint @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  pool: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+}
+
+type SetBurn @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  pool: Bytes!
+  amount: BigInt!
+  timestamp: BigInt!
+}
+
+type FeeClaim @entity(immutable: true) {
+  id: ID! # txLogIndex
+  pot: Pot!
+  to: Bytes!
+  amount: BigInt!
+  isProtocol: Boolean!
+  timestamp: BigInt!
+}
+
+type MetadataUpdate @entity(immutable: true) {
+  id: ID! # txLogIndex
+  entityType: EntityType!
+  entityKey: Bytes!
+  cid: Bytes!
+  version: BigInt!
+  timestamp: BigInt!
+}
+
+enum EntityType {
+  TRADER
+  POT
+  EPOCH
+  PLATFORM
+}
+
+type PlatformConfig @entity(immutable: false) {
+  id: ID! # "global"
+  lpShare: BigInt!
+  traderShare: BigInt!
+  protocolShare: BigInt!
+  treasury: Bytes!
+  maxExposure: BigInt!
+  minDeposit: BigInt!
+  maxPotsPerTrader: BigInt!
+  paused: Boolean!
+  updatedAt: BigInt!
+}
