@@ -5,6 +5,7 @@ import { buildApp } from "./app.js";
 import { initLiveKit } from "./modules/livekit/livekit.service.js";
 import { setupChatWs } from "./modules/livekit/chat-ws.js";
 import { setupWsHub } from "./modules/realtime/ws-hub.js";
+import { startKeeper } from "./modules/keeper/keeper.service.js";
 
 async function main() {
   logger.info("Starting BetterFun backend...");
@@ -20,6 +21,18 @@ async function main() {
   });
 
   initLiveKit();
+
+  // Start epoch keeper if configured
+  if (env.KEEPER_PRIVATE_KEY && env.EPOCH_CONTROLLER_ADDRESS) {
+    startKeeper({
+      rpcUrl: env.SOMNIA_RPC_URL,
+      keeperPrivateKey: env.KEEPER_PRIVATE_KEY as `0x${string}`,
+      epochControllerAddress: env.EPOCH_CONTROLLER_ADDRESS as `0x${string}`,
+      pollIntervalMs: env.KEEPER_POLL_INTERVAL_MS,
+    });
+  } else {
+    logger.warn("Keeper not started — KEEPER_PRIVATE_KEY or EPOCH_CONTROLLER_ADDRESS missing");
+  }
 
   const chatWss = setupChatWs(server);
   const hubWss = setupWsHub(server);

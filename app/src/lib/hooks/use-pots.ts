@@ -1,6 +1,7 @@
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMutation } from "@tanstack/react-query";
+import { useAccount } from "wagmi";
 import { PotFactoryAbi, ADDRESSES } from "../contracts";
 import { getPots, getPot, type SubgraphPot } from "../subgraph";
 import { api } from "../api-client";
@@ -112,6 +113,7 @@ export function useIsVault(address: string | undefined) {
  */
 export function useCreatePot() {
   const { writeContractAsync } = useWriteContract();
+  const { address } = useAccount();
   const qc = useQueryClient();
 
   return useMutation({
@@ -125,12 +127,13 @@ export function useCreatePot() {
         focus: string[];
       };
     }) => {
+      if (!address) throw new Error("Wallet not connected");
       const vault = await writeContractAsync({
         address: ADDRESSES.POT_FACTORY,
         abi: PotFactoryAbi,
         functionName: "createPot",
         args: [
-          "0x0000000000000000000000000000000000000000", // trader (placeholder — contract uses msg.sender or registry)
+          address,
           BigInt(input.epochId),
           input.exposureLimit ? BigInt(input.exposureLimit) : BigInt(10000) * 10n ** 6n,
         ],

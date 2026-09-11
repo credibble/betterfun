@@ -83,15 +83,15 @@ export interface SubgraphPlatformConfig {
 }
 
 export async function getEpochs(first: number = 100): Promise<SubgraphEpoch[]> {
-  const data = await gql<{ epochs: SubgraphEpoch[] }>(
+  const data = await gql<{ epoches: SubgraphEpoch[] }>(
     `query GetEpochs($first: Int!) {
-      epochs(first: $first, orderBy: createdAt, orderDirection: desc) {
+      epoches(first: $first, orderBy: createdAt, orderDirection: desc) {
         id startsAt endsAt state createdAt
       }
     }`,
     { first },
   );
-  return data.epochs;
+  return data.epoches;
 }
 
 export async function getEpoch(id: string): Promise<SubgraphEpoch | null> {

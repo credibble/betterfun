@@ -1,4 +1,4 @@
-type Epoch @entity(immutable: true) {
+type Epoch @entity(immutable: false) {
   id: ID! # epochId as string
   startsAt: BigInt!
   endsAt: BigInt!

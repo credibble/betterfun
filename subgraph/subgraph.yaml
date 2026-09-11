@@ -1,6 +1,4 @@
 specVersion: 0.0.5
-features:
-  - templateDataSources
 schema:
   file: ./schema.graphql
 templates:

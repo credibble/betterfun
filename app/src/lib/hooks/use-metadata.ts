@@ -8,7 +8,16 @@ export const MetadataEntityType = {
 } as const;
 
 /**
+ * Pad a 20-byte address to a 32-byte bytes32 value (left-padded with zeros).
+ * The MetadataStore contract expects bytes32 keys, so addresses must be padded.
+ */
+export function addressToBytes32(addr: `0x${string}`): `0x${string}` {
+  return `0x${addr.slice(2).toLowerCase().padStart(64, "0")}` as `0x${string}`;
+}
+
+/**
  * Read the current CID for an entity from the MetadataStore contract.
+ * entityKey must be a 32-byte bytes32 value (use addressToBytes32 for addresses).
  */
 export function useMetadataCID(
   entityType: number,
@@ -25,6 +34,7 @@ export function useMetadataCID(
 
 /**
  * Read full metadata entry (currentCID, previousCID, updatedAt, version).
+ * entityKey must be a 32-byte bytes32 value (use addressToBytes32 for addresses).
  */
 export function useMetadataEntry(
   entityType: number,
@@ -40,7 +50,8 @@ export function useMetadataEntry(
 }
 
 /**
- * Set metadata CID on-chain (requires ownership or authorization).
+ * Set metadata CID on-chain.
+ * entityKey and cid must be 32-byte bytes32 values (use addressToBytes32 for addresses).
  */
 export function useSetMetadata() {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();

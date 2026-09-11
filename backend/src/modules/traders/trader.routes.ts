@@ -43,7 +43,7 @@ export function buildTraderRoutes(dataSource: DataSource) {
     }
   });
 
-  router.patch("/me", requireAuth, requireTrader, async (req: AuthenticatedRequest, res) => {
+  router.patch("/me", requireAuth, async (req: AuthenticatedRequest, res) => {
     try {
       const parsed = TraderProfileUpdateRequest.safeParse(req.body);
       if (!parsed.success) {

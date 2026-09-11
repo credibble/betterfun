@@ -82,8 +82,11 @@ export function useTrade(vaultAddress?: `0x${string}`) {
     maxPrice?: number;
     expiryNs?: bigint;
   }) => {
-    const sideMap: Record<string, 0 | 1> = {
-      buy_up: 0, buy_down: 1, sell_up: 0, sell_down: 1,
+    const sideMap: Record<string, 0 | 1 | 2 | 3> = {
+      buy_up: 0,   // BUY_YES
+      sell_up: 1,  // SELL_YES
+      buy_down: 2, // BUY_NO
+      sell_down: 3, // SELL_NO
     };
     const side = sideMap[input.side];
     const isSell = input.side.startsWith("sell");

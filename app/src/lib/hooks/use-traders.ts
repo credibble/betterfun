@@ -129,7 +129,7 @@ export function useMyTrader() {
   });
 
   const data = (() => {
-    if (!onChainProfile && !backendProfile) return null;
+    if (!backendProfile) return null;
 
     const oc = onChainProfile as unknown as {
       metadataCID: string;
@@ -223,6 +223,7 @@ export function useTraderCount() {
  */
 export function useCreateTrader() {
   const { writeContractAsync } = useWriteContract();
+  const { address } = useAccount();
   const qc = useQueryClient();
 
   return useMutation({
@@ -242,11 +243,11 @@ export function useCreateTrader() {
         address: ADDRESSES.TRADER_REGISTRY,
         abi: TraderRegistryAbi,
         functionName: "registerTrader",
-        args: [
-          zeroBytes32,
-          input.payoutAddress ?? "0x0000000000000000000000000000000000000000",
-          input.traderType === "ai" ? 1 : 0,
-        ],
+          args: [
+            zeroBytes32,
+            input.payoutAddress ?? address ?? "0x0000000000000000000000000000000000000001",
+            input.traderType === "ai" ? 1 : 0,
+          ],
       });
 
       // Backend profile + JWT

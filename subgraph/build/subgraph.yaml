@@ -1,6 +1,4 @@
 specVersion: 0.0.5
-features:
-  - templateDataSources
 schema:
   file: schema.graphql
 templates:
@@ -49,9 +47,9 @@ dataSources:
     name: EpochController
     network: somnia-testnet
     source:
-      address: "0x66264df0a101f49720e55e08f28229d567316892"
+      address: "0xdcf29d5a725192ebae951af13651cf789062d818"
       abi: EpochController
-      startBlock: 483000000
+      startBlock: 485577225
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -78,9 +76,9 @@ dataSources:
     name: TraderRegistry
     network: somnia-testnet
     source:
-      address: "0xe4d47c6ba74e8fa20ff6f28031e41f9b7b8738ea"
+      address: "0x58bf87125d89f84bdd134133e0ff86097c44a4fa"
       abi: TraderRegistry
-      startBlock: 483000000
+      startBlock: 485577238
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -104,9 +102,9 @@ dataSources:
     name: PotFactory
     network: somnia-testnet
     source:
-      address: "0x5ba4b53279e79e98de28ec86369db7391ec6d1f6"
+      address: "0x858baca13a3a516e31e8fa4d6165e95a25106c1b"
       abi: PotFactory
-      startBlock: 483000000
+      startBlock: 485577265
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -126,9 +124,9 @@ dataSources:
     name: MetadataStore
     network: somnia-testnet
     source:
-      address: "0xdc83cca42803b63055e1635c4557309862c02677"
+      address: "0x4cd40a99e636d2c08b48305a9da29d187712ed78"
       abi: MetadataStore
-      startBlock: 483000000
+      startBlock: 485577252
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7
@@ -146,9 +144,9 @@ dataSources:
     name: PlatformGovernance
     network: somnia-testnet
     source:
-      address: "0xcedba65773205bb1773a82f8a3c242aef124b916"
+      address: "0xa791c5a9c78e1ef785ce74db9a729a595e01a0f3"
       abi: PlatformGovernance
-      startBlock: 483000000
+      startBlock: 485577210
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.7

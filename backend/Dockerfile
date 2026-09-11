@@ -45,6 +45,9 @@ COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/shared/package.json ./shared/
 COPY --from=builder /app/backend/package.json ./backend/
 
+# Create uploads directory writable by node user
+RUN mkdir -p /app/uploads/videos /app/uploads/images && chown -R node:node /app/uploads
+
 USER node
 
 EXPOSE 3001

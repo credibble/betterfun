@@ -1,4 +1,5 @@
 import { useWriteContract, useReadContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount } from "wagmi";
 import { parseUnits } from "viem";
 import {
   PotVaultAbi,
@@ -15,6 +16,30 @@ const TUSDC_DECIMALS = 6;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 export { parseUsdc, formatUsdc };
+
+/** Check if the connected wallet is the vault's operator. */
+export function useVaultIsOperator(vaultAddress: `0x${string}` | undefined) {
+  const { address } = useAccount();
+  const { data: operator } = useReadContract({
+    address: vaultAddress,
+    abi: PotVaultAbi,
+    functionName: "operator",
+    query: { enabled: !!vaultAddress },
+  });
+  return !!address && !!operator && address.toLowerCase() === (operator as string).toLowerCase();
+}
+
+/** Check if the connected wallet is the vault's governance. */
+export function useVaultIsGovernance(vaultAddress: `0x${string}` | undefined) {
+  const { address } = useAccount();
+  const { data: governance } = useReadContract({
+    address: vaultAddress,
+    abi: PotVaultAbi,
+    functionName: "governance",
+    query: { enabled: !!vaultAddress },
+  });
+  return !!address && !!governance && address.toLowerCase() === (governance as string).toLowerCase();
+}
 
 /** Format vault NAV for display (raw USDC or number). */
 export function formatNav(nav: string | number | undefined): string {
@@ -41,15 +66,22 @@ export function formatSharePrice(
 /**
  * Deposit tUSDC into a PotVault, receive LP shares.
  * Steps:
- *   1. Approve vault to spend tUSDC
- *   2. Call vault.enter(amount)
+ *   1. Check vault is not halted
+ *   2. Approve vault to spend tUSDC
+ *   3. Call vault.enter(amount)
  */
 export function useVaultDeposit(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const { data: halted } = useReadContract({
+    address: addr,
+    abi: PotVaultAbi,
+    functionName: "halted",
+  });
 
   const deposit = async (amountUsd: number) => {
+    if (halted) throw new Error("Vault is halted");
     const amount = parseUnits(amountUsd.toFixed(TUSDC_DECIMALS), TUSDC_DECIMALS);
 
     await writeContractAsync({
@@ -84,12 +116,13 @@ export function useVaultWithdraw(vaultAddress?: `0x${string}`) {
   const addr = vaultAddress ?? VAULT_ADDRESS;
 
   const withdraw = async (shares: bigint) => {
-    await writeContractAsync({
+    const collateralOut = await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
       functionName: "exit",
       args: [shares],
     });
+    return collateralOut;
   };
 
   return { withdraw, hash, isPending, receipt, error };
@@ -97,18 +130,20 @@ export function useVaultWithdraw(vaultAddress?: `0x${string}`) {
 
 // ── Trade ─────────────────────────────────────────────────────────────────────
 
-type Side = 0 | 1; // 0 = YES (up), 1 = NO (down)
+type Side = 0 | 1 | 2 | 3; // 0=BUY_YES, 1=SELL_YES, 2=BUY_NO, 3=SELL_NO
 type OrderKind = 0 | 1 | 2; // 0 = GTC, 1 = IOC, 2 = FOK
 type SelfMatch = 0 | 1; // 0 = reject, 1 = allow
 
 /**
  * Place a trade on a PotVault (binary event orderbook).
- * side: 0 = buy YES (up), 1 = buy NO (down)
+ * side: 0=BUY_YES, 1=SELL_YES, 2=BUY_NO, 3=SELL_NO
+ * Only callable by the vault operator.
  */
 export function useVaultTrade(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isOperator = useVaultIsOperator(addr);
 
   const trade = async (params: {
     pool: `0x${string}`;
@@ -119,6 +154,7 @@ export function useVaultTrade(vaultAddress?: `0x${string}`) {
     orderKind?: OrderKind;
     selfMatch?: SelfMatch;
   }) => {
+    if (!isOperator) throw new Error("Only the vault operator can trade");
     const orderId = await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
@@ -145,8 +181,10 @@ export function useVaultMintSet(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isOperator = useVaultIsOperator(addr);
 
   const mintSet = async (pool: `0x${string}`, amount: bigint) => {
+    if (!isOperator) throw new Error("Only the vault operator can mint set tokens");
     await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
@@ -164,8 +202,10 @@ export function useVaultBurnSet(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isOperator = useVaultIsOperator(addr);
 
   const burnSet = async (pool: `0x${string}`, amount: bigint) => {
+    if (!isOperator) throw new Error("Only the vault operator can burn set tokens");
     await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
@@ -185,12 +225,13 @@ export function useVaultRedeem(vaultAddress?: `0x${string}`) {
   const addr = vaultAddress ?? VAULT_ADDRESS;
 
   const redeem = async (outcomeId: bigint, amount: bigint) => {
-    await writeContractAsync({
+    const collateralOut = await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
       functionName: "redeem",
       args: [outcomeId, amount],
     });
+    return collateralOut;
   };
 
   return { redeem, hash, isPending, receipt, error };
@@ -202,8 +243,10 @@ export function useVaultApprovePool(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isGov = useVaultIsGovernance(addr);
 
   const approvePool = async (pool: `0x${string}`) => {
+    if (!isGov) throw new Error("Only vault governance can approve pools");
     await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
@@ -221,8 +264,10 @@ export function useVaultCancelOrder(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isOperator = useVaultIsOperator(addr);
 
   const cancelOrder = async (pool: `0x${string}`, orderId: bigint) => {
+    if (!isOperator) throw new Error("Only the vault operator can cancel orders");
     await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,
@@ -240,8 +285,10 @@ export function useVaultClaimTraderFees(vaultAddress?: `0x${string}`) {
   const { writeContractAsync, data: hash, isPending, error } = useWriteContract();
   const receipt = useWaitForTransactionReceipt({ hash });
   const addr = vaultAddress ?? VAULT_ADDRESS;
+  const isOperator = useVaultIsOperator(addr);
 
   const claimTraderFees = async () => {
+    if (!isOperator) throw new Error("Only the vault operator can claim trader fees");
     await writeContractAsync({
       address: addr,
       abi: PotVaultAbi,

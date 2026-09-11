@@ -4,7 +4,7 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       POSTGRES_USER: betterfun
       POSTGRES_PASSWORD: betterfun_dev
@@ -21,7 +21,7 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -38,6 +38,8 @@ services:
       POSTGRES_USER: graph-node
       POSTGRES_PASSWORD: graph-node
       POSTGRES_DB: graph-node
+      PGDATA: /var/lib/postgresql/data
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=C"
     volumes:
       - gn-pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -67,36 +69,12 @@ services:
       postgres_user: graph-node
       postgres_pass: graph-node
       postgres_db: graph-node
-      ipfs: 'ipfs:5001'
+      ipfs: 'graph-node-ipfs:5001'
       ethereum: 'somnia-testnet:https://dream-rpc.somnia.network'
       GRAPH_LOG: info
-      ETHEREUM_REORG_THRESHOLD: 0
-    entrypoint:
-      - sh
-      - -c
-      - |
-        echo "Waiting for postgres..."
-        for i in $$(seq 1 30); do
-          if nc -z graph-node-postgres 5432 2>/dev/null; then break; fi
-          echo "  attempt $$i/30..."
-          sleep 2
-        done
-        echo "Waiting for ipfs..."
-        for i in $$(seq 1 15); do
-          if nc -z ipfs 5001 2>/dev/null; then break; fi
-          echo "  attempt $$i/15..."
-          sleep 2
-        done
-        echo "Starting graph-node..."
-        exec graph-node \
-          --postgres-host $$postgres_host \
-          --postgres-user $$postgres_user \
-          --postgres-pass $$postgres_pass \
-          --postgres-db $$postgres_db \
-          --ipfs $$ipfs \
-          --ethereum-rpc $$ethereum \
-          --node-id 0 \
-          --store-debug-info
+      ETHEREUM_BLOCK_BATCH_SIZE: '500'
+      GRAPH_ETHEREUM_MAX_BLOCK_RANGE_SIZE: '500'
+      GRAPH_ETHEREUM_MAX_EVENT_ONLY_RANGE: '500'
     depends_on:
       graph-node-postgres:
         condition: service_healthy
