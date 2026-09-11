@@ -15,3 +15,8 @@ export function getStreamOverride(traderId: string | undefined): string | null {
   if (!traderId) return null;
   return STREAM_OVERRIDES[traderId.toLowerCase()] ?? null;
 }
+
+/** Whether a trader has a configured stream override (always show its feed). */
+export function hasStreamOverride(traderId: string | undefined): boolean {
+  return getStreamOverride(traderId) !== null;
+}

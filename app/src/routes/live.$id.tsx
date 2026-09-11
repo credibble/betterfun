@@ -12,6 +12,7 @@ import StakePanel from "@/components/staking/StakePanel";
 import { PositionTable } from "@/components/traders/PositionTable";
 import { useStreamViewers } from "@/hooks/use-stream-viewers";
 import { useStreamOverlay } from "@/hooks/use-stream-overlay";
+import { hasStreamOverride } from "@/lib/stream-overrides";
 
 export const Route = createFileRoute("/live/$id")({
   head: () => ({
@@ -38,7 +39,7 @@ function LivePage() {
   const { positions, pnl } = useStreamOverlay(pot?.id ?? "", id);
   const { data: rawPositions = [] } = usePositions(pot?.id ?? "");
 
-  const isLive = trader?.isLive ?? false;
+  const isLive = (trader?.isLive ?? false) || hasStreamOverride(id);
 
   if (isLoading) {
     return (

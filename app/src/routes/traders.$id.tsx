@@ -18,6 +18,7 @@ import { PotCard } from "@/components/traders/PotCard";
 import StreamPlayer from "@/components/stream/StreamPlayer";
 import StreamChat from "@/components/chat/StreamChat";
 import { useStreamViewers } from "@/hooks/use-stream-viewers";
+import { hasStreamOverride } from "@/lib/stream-overrides";
 import { toast } from "sonner";
 import { B3TR, XP } from "@/components/Token";
 import {
@@ -68,7 +69,8 @@ function TraderProfile() {
 
   const room = t?.handle ? `stream-${t.handle.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()}` : "";
   const { data: viewerData } = useStreamViewers(room);
-  const isLive = t?.isLive ?? false;
+  const hasOverride = hasStreamOverride(id);
+  const isLive = (t?.isLive ?? false) || hasOverride;
 
   const onShare = async () => {
     copyText(window.location.href);
